@@ -78,7 +78,8 @@
       {
         "path": "aten/src/THC/THCTensorRandom.cu",
         "s_constants": {
-          "struct curandStateMtgp32*": "curandStateMtgp32*"
+          "struct curandStateMtgp32*": "curandStateMtgp32*",
+          "state[threadIdx.x].k = kernel;" : "state[threadIdx.x].set_params(kernel);"
         }
       },
       {
@@ -210,12 +211,12 @@
         "THCTensor_(getTextureObject)"
       ]
     },
-    {
-      "path": "aten/src/THC/THCTensorRandom.cu",
-      "functions": [
-        "THCRandom_setRNGState",
-        "set_rngstate_kernel"
-      ]
-    }
+    #{
+    #  "path": "aten/src/THC/THCTensorRandom.cu",
+    #  "functions": [
+    #    "THCRandom_setRNGState",
+    #    "set_rngstate_kernel"
+    #  ]
+    #}
   ]
 }

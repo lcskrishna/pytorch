@@ -479,25 +479,25 @@ cudaError_t THCudaMemGetInfo(THCState *state,  size_t* freeBytes, size_t* totalB
 
 half THC_float2half(float f)
 {
-#if CUDA_VERSION < 9000
-  half h;
-  TH_float2halfbits(&f, &h.x);
-  return h;
-#else
+#if CUDA_VERSION >= 9000 || defined(__HIP_PLATFORM_HCC__)
   __half_raw h_raw;
   TH_float2halfbits(&f, &h_raw.x);
   return half(h_raw);
+#else
+  half h;
+  TH_float2halfbits(&f, &h.x);
+  return h;
 #endif
 }
 
 float  THC_half2float(half h)
 {
   float f;
-#if CUDA_VERSION < 9000
-  TH_halfbits2float(&h.x, &f);
-#else
+#if CUDA_VERSION >= 9000 || defined(__HIP_PLATFORM_HCC__)
   __half_raw h_raw(h);
   TH_halfbits2float(&h_raw.x, &f);
+#else
+  TH_halfbits2float(&h.x, &f);
 #endif
   return f;
 }

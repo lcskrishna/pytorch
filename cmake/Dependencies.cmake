@@ -545,6 +545,10 @@ if(NOT BUILD_ATEN_MOBILE)
     list(APPEND HIP_HIPCC_FLAGS -Wno-shift-count-negative)
     list(APPEND HIP_HIPCC_FLAGS -Wno-shift-count-overflow)
     list(APPEND HIP_HIPCC_FLAGS -Wno-unused-command-line-argument)
+    if(CMAKE_BUILD_TYPE MATCHES Debug)
+       list(APPEND HIP_HCC_FLAGS -g)
+       list(APPEND HIP_HCC_FLAGS -O0)
+    endif(CMAKE_BUILD_TYPE MATCHES Debug)
 
     set(Caffe2_HIP_INCLUDES
       ${hip_INCLUDE_DIRS} ${hcc_INCLUDE_DIRS} ${hsa_INCLUDE_DIRS} ${rocrand_INCLUDE_DIRS} ${hiprand_INCLUDE_DIRS} ${rocblas_INCLUDE_DIRS} ${miopen_INCLUDE_DIRS} ${thrust_INCLUDE_DIRS} $<INSTALL_INTERFACE:include> ${Caffe2_HIP_INCLUDES})

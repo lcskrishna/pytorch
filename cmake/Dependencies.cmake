@@ -551,8 +551,8 @@ if(NOT BUILD_ATEN_MOBILE)
     list(APPEND HIP_HIPCC_FLAGS -Wno-duplicate-decl-specifier)
     
     if(CMAKE_BUILD_TYPE MATCHES Debug)
-       list(APPEND HIP_HCC_FLAGS -g)
-       list(APPEND HIP_HCC_FLAGS -O0)
+       list(APPEND HIP_HIPCC_FLAGS -g)
+       list(APPEND HIP_HIPCC_FLAGS -O0)
     endif(CMAKE_BUILD_TYPE MATCHES Debug)
 
     set(Caffe2_HIP_INCLUDES

@@ -8,7 +8,7 @@
 #include <vector>
 
 static const int MIOPEN_DIM_MAX = 4;
-static const bool MIOPEN_ENABLED = getenv("DISABLE_MIOPEN") != NULL;
+static const bool MIOPEN_ENABLED = getenv("DISABLE_MIOPEN") == NULL;
 
 namespace at { namespace native {
 

@@ -62,11 +62,8 @@ ENDIF()
 # THRUST_PATH
 IF(DEFINED ENV{THRUST_PATH})
   SET(THRUST_PATH $ENV{THRUST_PATH})
-ELSEIF(DEFINED ENV{THRUST_ROOT})
-  # TODO: Remove support of THRUST_ROOT environment variable
-  SET(THRUST_PATH $ENV{THRUST_ROOT})
 ELSE()
-  SET(THRUST_PATH ${ROCM_PATH}/Thrust)
+  SET(THRUST_PATH ${ROCM_PATH}/include)
 ENDIF()
 
 # HIPRAND_PATH
@@ -81,6 +78,13 @@ IF(NOT DEFINED ENV{ROCRAND_PATH})
   SET(ROCRAND_PATH ${ROCM_PATH}/rocrand)
 ELSE()
   SET(ROCRAND_PATH $ENV{ROCRAND_PATH})
+ENDIF()
+
+# MIOPENGEMM
+IF(NOT DEFINED ENV{MIOPENGEMM_PATH})
+  SET(MIOPENGEMM_PATH ${ROCM_PATH}/miopengemm)
+ELSE()
+  SET(MIOPENGEMM_PATH $ENV{MIOPENGEMM_PATH})
 ENDIF()
 
 # MIOPEN_PATH
@@ -133,6 +137,7 @@ IF(HIP_FOUND)
   set(rocrand_DIR ${ROCRAND_PATH}/lib/cmake/rocrand)
   set(hiprand_DIR ${HIPRAND_PATH}/lib/cmake/hiprand)
   set(rocblas_DIR ${ROCBLAS_PATH}/lib/cmake/rocblas)
+  set(miopengemm_DIR ${MIOPENGEMM_PATH}/lib/cmake/miopengemm)
   set(miopen_DIR ${MIOPEN_PATH}/lib/cmake/miopen)
   set(rocfft_DIR ${ROCFFT_PATH}/lib/cmake/rocfft)
   set(hipsparse_DIR ${HIPSPARSE_PATH}/lib/cmake/hipsparse)
@@ -142,7 +147,7 @@ IF(HIP_FOUND)
   find_package_and_print_version(hiprand REQUIRED)
   find_package_and_print_version(rocblas REQUIRED)
   find_package_and_print_version(miopen REQUIRED)
-  find_package_and_print_version(miopengemm)
+  find_package_and_print_version(miopengemm REQUIRED)
   find_package_and_print_version(rocfft REQUIRED)
   #find_package_and_print_version(hipsparse REQUIRED)
   find_package_and_print_version(rocsparse REQUIRED)

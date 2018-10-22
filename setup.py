@@ -848,7 +848,7 @@ if USE_CUDA:
 if USE_ROCM:
     CAFFE2_LIBS.extend(['-Wl,--no-as-needed', os.path.join(lib_path, 'libcaffe2_hip.so'), '-Wl,--as-needed'])
 THD_LIB = os.path.join(lib_path, 'libTHD.a')
-NCCL_LIB = os.path.join(lib_path, 'libnccl.so.1')
+NCCL_LIB = os.path.join(lib_path, 'libnccl.so.2')
 C10D_LIB = os.path.join(lib_path, 'libc10d.a')
 
 # static library only
@@ -863,7 +863,7 @@ if IS_DARWIN:
         CAFFE2_LIBS.append(os.path.join(lib_path, 'libcaffe2_gpu.dylib'))
     if USE_ROCM:
         CAFFE2_LIBS.append(os.path.join(lib_path, 'libcaffe2_hip.dylib'))
-    NCCL_LIB = os.path.join(lib_path, 'libnccl.1.dylib')
+    NCCL_LIB = os.path.join(lib_path, 'libnccl.2.dylib')
 
 if IS_WINDOWS:
     CAFFE2_LIBS = [os.path.join(lib_path, 'caffe2.lib')]
@@ -1021,6 +1021,7 @@ if USE_ROCM:
     rocfft_include_path = '/opt/rocm/rocfft/include'
     hiprand_include_path = '/opt/rocm/hiprand/include'
     rocrand_include_path = '/opt/rocm/rocrand/include'
+    thrust_include_path = '/opt/rocm/include/'
     hip_lib_path = '/opt/rocm/hip/lib'
     hcc_lib_path = '/opt/rocm/hcc/lib'
     include_dirs.append(rocm_include_path)
@@ -1030,6 +1031,7 @@ if USE_ROCM:
     include_dirs.append(hipsparse_include_path)
     include_dirs.append(hiprand_include_path)
     include_dirs.append(rocrand_include_path)
+    include_dirs.append(thrust_include_path)
     include_dirs.append(tmp_install_path + "/include/THCUNN")
     extra_link_args.append('-L' + hip_lib_path)
     extra_link_args.append('-Wl,-rpath,' + hip_lib_path)
@@ -1195,6 +1197,7 @@ if __name__ == '__main__':
                 'lib/torch_shm_manager',
                 'lib/*.h',
                 'lib/include/ATen/*.h',
+                'lib/include/ATen/cpu/*.h',
                 'lib/include/ATen/core/*.h',
                 'lib/include/ATen/cuda/*.cuh',
                 'lib/include/ATen/cuda/*.h',

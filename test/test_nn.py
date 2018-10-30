@@ -49,10 +49,8 @@ if TEST_NUMPY:
     import numpy as np
 
 ALL_TENSORTYPES = [torch.float,
-                   torch.double]
-
-if not TEST_WITH_ROCM:
-    ALL_TENSORTYPES.append(torch.half)
+                   torch.double,
+                   torch.half]
 
 NO_HALF_TENSORTYPES = [torch.float,
                        torch.double]
@@ -371,14 +369,13 @@ class NewModuleTest(InputVariableMixin, ModuleTest):
                         test_case.assertIsInstance(p, torch.cuda.DoubleTensor)
                         test_case.assertEqual(p.get_device(), 0)
 
-                if not TEST_WITH_ROCM:
-                    # test half()
-                    input = input.half().cuda()
-                    module.half().cuda()
-                    module(input)
-                    for p in module.parameters():
-                        test_case.assertIsInstance(p, torch.cuda.HalfTensor)
-                        test_case.assertEqual(p.get_device(), 0)
+                # test half()
+                input = input.half().cuda()
+                module.half().cuda()
+                module(input)
+                for p in module.parameters():
+                    test_case.assertIsInstance(p, torch.cuda.HalfTensor)
+                    test_case.assertEqual(p.get_device(), 0)
 
     def _get_target(self):
         return self._get_arg('target', False)

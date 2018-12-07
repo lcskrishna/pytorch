@@ -37,7 +37,7 @@ __global__ void SpatialSoftmaxKernel(const int N, const int A,
     float max_val = -FLT_MAX;
     for(int c = a * num_classes; c < (a + 1) * num_classes; ++c) {
       int idx = i * (H * W * D) +  c * (H * W) + y * W + x;
-      max_val = max(max_val, Xdata[idx]);
+      max_val = fmaxf(max_val, Xdata[idx]);
     }
     // Exponentiate
     float expsum = 0.0f;
@@ -69,7 +69,7 @@ __global__ void SoftmaxFocalLossKernel(
     int n = i / (W * H * A);
     const int label = static_cast<int>(targets[i]);
 
-    float Np = max(weight_pos[0], 1.0);
+    float Np = fmaxf(weight_pos[0], 1.0f);
     float z = (label == 0) * (1 - alpha) / Np +
               (label >= 1) * alpha / Np;
 
@@ -77,9 +77,15 @@ __global__ void SoftmaxFocalLossKernel(
     if (label >= 0) {
       int offset = a * num_classes;
       int idx = n * (H * W * D) + (offset + label) * (H * W) + y * W + x;
+      #ifdef __HIP_PLATFORM_HCC__
+      losses[i] =
+          -(pow(1.0f - Pdata[idx], gamma) *
+          log(fmaxf(Pdata[idx], FLT_MIN))) * z;
+      #else
       losses[i] =
           -(pow(1.0f - Pdata[idx], gamma) *
           log(max(Pdata[idx], FLT_MIN))) * z;
+      #endif
     }
   }
 }
@@ -97,7 +103,7 @@ __global__ void SoftmaxFocalLossGradientWeightKernel(
     int a = (i / (W * H)) % A;
     int n = i / (W * H * A);
     const int label = static_cast<int>(targets[i]);
-    float Np = max(weight_pos[0], 1.0);
+    float Np = fmaxf(weight_pos[0], 1.0f);
     float z =  (label == 0) * (1 - alpha) / Np +
                (label >= 1) * alpha / Np;
 
@@ -107,9 +113,15 @@ __global__ void SoftmaxFocalLossGradientWeightKernel(
       int idx = n * (H * W * D) + (offset + label) * (H * W) + y * W + x;
       float onemp = 1. - Pdata[idx];
       float p = Pdata[idx];
+      #ifdef __HIP_PLATFORM_HCC__
+      buff[i] =
+          (-pow(onemp, gamma) +
+          gamma * pow(onemp, gamma - 1) * p * log(fmaxf(p, FLT_MIN))) * z;
+      #else
       buff[i] =
           (-pow(onemp, gamma) +
           gamma * pow(onemp, gamma - 1) * p * log(max(p, FLT_MIN))) * z;
+      #endif
     }
   }
 }

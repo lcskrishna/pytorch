@@ -45,7 +45,7 @@ __global__ void SigmoidFocalLossKernel(
     float c1 = (t == (d + 1));
     float c2 = (t != -1 & t != (d + 1));
 
-    float Np = max(weight_pos[0], 1.0);
+    float Np = fmaxf(weight_pos[0], 1.0f);
     float zn = (1.0 - alpha) / Np;
     float zp = alpha / Np;
 
@@ -53,7 +53,11 @@ __global__ void SigmoidFocalLossKernel(
     float p = 1. / (1. + expf(-logits[i]));
 
     // (1 - p)**gamma * log(p) where
+    #ifdef __HIP_PLATFORM_HCC__
+    float term1 = powf((1. - p), gamma) * logf(fmaxf(p, FLT_MIN));
+    #else
     float term1 = powf((1. - p), gamma) * logf(max(p, FLT_MIN));
+    #endif
     // p**gamma * log(1 - p)
     float term2 =
         powf(p, gamma) *
@@ -82,7 +86,7 @@ __global__ void SigmoidFocalLossGradientKernel(
       int a = c / num_classes;   // current anchor
       int d = c % num_classes;   // current class
 
-      float Np = max(weight_pos[0], 1.0);
+      float Np = fmaxf(weight_pos[0], 1.0f);
       float zn = (1.0 - alpha) / Np;
       float zp = alpha / Np;
       int t = targets[n * (H * W * A) + a * (H * W) + y * W + x];
@@ -92,9 +96,15 @@ __global__ void SigmoidFocalLossGradientKernel(
       float p = 1. / (1. + expf(-logits[i]));
 
       // (1-p)**g * (1 - p - g*p*log(p))
+      #ifdef __HIP_PLATFORM_HCC__
+      float term1 =
+          powf((1. - p), gamma) *
+          (1. - p - (p * gamma * logf(fmaxf(p, FLT_MIN))));
+      #else
       float term1 =
           powf((1. - p), gamma) *
           (1. - p - (p * gamma * logf(max(p, FLT_MIN))));
+      #endif
       // (p**g) * (g*(1-p)*log(1-p) - p)
       float term2 =
           powf(p, gamma) *

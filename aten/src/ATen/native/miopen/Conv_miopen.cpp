@@ -584,6 +584,98 @@ void miopen_convolution_add_bias_(CheckedFrom c, const TensorArg& output, const 
 //    - It doesn't resize output (it is assumed to be correctly sized)
 //
 void raw_miopen_convolution_forward_out(
+    const Tensor& output, const Tensor& input, const Tensor& weight, const Tensor& bias,
+    IntList padding, IntList stride, IntList dilation, int64_t groups,
+    bool benchmark, bool deterministic) {
+
+  auto dataType = getMiopenDataType(input);
+
+  ConvolutionArgs args{ input, output, weight };
+  args.handle = getMiopenHandle();
+  setConvolutionParams(&args.params, input, weight, padding, stride, dilation, groups, deterministic);
+  args.idesc.set(input);
+  args.wdesc.set(weight);
+  args.odesc.set(output);
+  args.cdesc.set(dataType, input.dim() - 2, args.params.padding, args.params.stride, args.params.dilation, args.params.groups);
+
+  if (bias.defined()) {
+
+    TensorDescriptor bdesc;
+    bdesc.set(bias.expand({1, bias.size(0)}), output.dim());
+  
+    //Initializations.
+    miopenFusionPlanDescriptor_t fusePlanDesc;
+    miopenFusionDirection_t fusionDirection = miopenVerticalFusion;
+    miopenOperatorArgs_t fusionArgs;
+    miopenFusionOpDescriptor_t convOp;
+    miopenFusionOpDescriptor_t biasOp;
+
+    miopenCreateFusionPlan(&fusePlanDesc, fusionDirection, args.idesc.desc());
+    miopenCreateOperatorArgs(&fusionArgs);
+    miopenCreateOpConvForward(fusePlanDesc, &convOp, args.cdesc.desc(), args.wdesc.desc());
+    miopenCreateOpBiasForward(fusePlanDesc, &biasOp, bdesc.desc());
+
+    //Compile fusionplan.
+    MIOPEN_CHECK(miopenCompileFusionPlan(args.handle, fusePlanDesc));
+    Constant alpha(dataType, 1);
+    Constant beta(dataType, 0);
+    
+    miopenSetOpArgsConvForward(fusionArgs, convOp, &alpha, &beta, weight.data_ptr());
+    miopenSetOpArgsBiasForward(fusionArgs, biasOp, &alpha, &beta, bias.data_ptr());
+
+    //execute fusionplan.
+    MIOPEN_CHECK(miopenExecuteFusionPlan(
+        args.handle, fusePlanDesc, 
+        args.idesc.desc(), input.data_ptr(), 
+        args.odesc.desc(), output.data_ptr(), fusionArgs));
+
+  } else {
+
+  miopenConvFwdAlgorithm_t fwdAlg;
+  Workspace workspace = chooseAlgorithm(args, benchmark, &fwdAlg);
+
+  Constant one(dataType, 1);
+  Constant zero(dataType, 0);
+
+  MIOPEN_CHECK(miopenConvolutionForward(
+    args.handle,
+    &one, args.idesc.desc(), input.data_ptr(),
+    args.wdesc.desc(), weight.data_ptr(),
+    args.cdesc.desc(), fwdAlg, &zero,
+    args.odesc.desc(), output.data_ptr(), workspace.data, workspace.size)); 
+  }
+}
+
+Tensor miopen_convolution_forward(
+    CheckedFrom c,
+    const TensorArg& input, const TensorArg& weight, const TensorArg& bias,
+    IntList padding, IntList stride, IntList dilation, int64_t groups,
+    bool benchmark, bool deterministic)
+{
+  checkAllSameType(c, {input, weight});
+  checkAllSameGPU(c, {input, weight});
+  checkAllSameGPU(c, {input, bias});
+
+  auto output_t = at::empty(
+                    conv_output_size(input->sizes(), weight->sizes(),
+                                     padding, stride, dilation, groups),
+                    input->options());
+
+  // Avoid ambiguity of "output" when this is being used as backwards
+  TensorArg output{ output_t, "result", 0 };
+  convolution_shape_check(c, input, weight, output, padding, stride, dilation, groups);
+
+  // See #4500
+  Tensor weight_contig = weight->contiguous();
+
+  raw_miopen_convolution_forward_out(
+      *output, *input, weight_contig, *bias,
+      padding, stride, dilation, groups, benchmark, deterministic);
+
+  return *output;
+}
+
+void raw_miopen_convolution_forward_out_old(
     const Tensor& output, const Tensor& input, const Tensor& weight,
     IntList padding, IntList stride, IntList dilation, int64_t groups,
     bool benchmark, bool deterministic) {
@@ -612,7 +704,7 @@ void raw_miopen_convolution_forward_out(
     args.odesc.desc(), output.data_ptr(), workspace.data, workspace.size));
 }
 
-Tensor miopen_convolution_forward(
+Tensor miopen_convolution_forward_old(
     CheckedFrom c,
     const TensorArg& input, const TensorArg& weight,
     IntList padding, IntList stride, IntList dilation, int64_t groups,
@@ -633,7 +725,7 @@ Tensor miopen_convolution_forward(
   // See #4500
   Tensor weight_contig = weight->contiguous();
 
-  raw_miopen_convolution_forward_out(
+  raw_miopen_convolution_forward_out_old(
       *output, *input, weight_contig,
       padding, stride, dilation, groups, benchmark, deterministic);
 
@@ -651,10 +743,10 @@ Tensor miopen_convolution(
   setMIOpenStreamToCurrent();
   CheckedFrom c = "miopen_convolution";
   auto output_t = miopen_convolution_forward(
-    c, input, weight, padding, stride, dilation, groups, benchmark, deterministic);
-  if (bias->defined()) {
+    c, input, weight, bias, padding, stride, dilation, groups, benchmark, deterministic);
+  /*if (bias->defined()) {
     miopen_convolution_add_bias_(c, { output_t, "result", 0 }, bias);
-  }
+  } */
   return output_t;
 }
 
@@ -666,7 +758,7 @@ Tensor miopen_convolution_transpose_backward_input(
   TensorArg grad_output { grad_output_t,  "grad_output", 1 },
             weight      { weight_t, "weight", 2 };
   setMIOpenStreamToCurrent();
-  return miopen_convolution_forward(
+  return miopen_convolution_forward_old(
     "miopen_convolution_transpose_backward_input",
     grad_output, weight, padding, stride, dilation, groups, benchmark, deterministic);
 }

@@ -603,6 +603,7 @@ void raw_miopen_convolution_forward_out(
     bool benchmark, bool deterministic) {
 
   auto dataType = getMiopenDataType(input);
+  miopenConvolutionMode_t c_mode = miopenConvolution;
 
   ConvolutionArgs args{ input, output, weight };
   args.handle = getMiopenHandle();
@@ -610,7 +611,7 @@ void raw_miopen_convolution_forward_out(
   args.idesc.set(input);
   args.wdesc.set(weight);
   args.odesc.set(output);
-  args.cdesc.set(dataType, input.dim() - 2, args.params.padding, args.params.stride, args.params.dilation, args.params.groups);
+  args.cdesc.set(dataType, c_mode, input.dim() - 2, args.params.padding, args.params.stride, args.params.dilation, args.params.groups);
 
   miopenConvFwdAlgorithm_t fwdAlg;
   Workspace workspace = chooseAlgorithm(args, benchmark, &fwdAlg);
@@ -720,6 +721,7 @@ void raw_miopen_convolution_backward_input_out(
     bool benchmark, bool deterministic) {
 
   auto dataType = getMiopenDataType(grad_output);
+  miopenConvolutionMode_t c_mode = miopenConvolution;
 
   ConvolutionArgs args{ grad_input, grad_output, weight };
   args.handle = getMiopenHandle();
@@ -727,7 +729,7 @@ void raw_miopen_convolution_backward_input_out(
   args.idesc.set(grad_input);
   args.wdesc.set(weight);
   args.odesc.set(grad_output);
-  args.cdesc.set(dataType, grad_output.dim() - 2, args.params.padding, args.params.stride, args.params.dilation, args.params.groups);
+  args.cdesc.set(dataType, c_mode, grad_output.dim() - 2, args.params.padding, args.params.stride, args.params.dilation, args.params.groups);
 
   miopenConvBwdDataAlgorithm_t bwdDataAlg;
   Workspace workspace = chooseAlgorithm(args, benchmark, &bwdDataAlg);
@@ -846,6 +848,7 @@ void raw_miopen_convolution_backward_weight_out(
     bool benchmark, bool deterministic) {
 
   auto dataType = getMiopenDataType(input);
+  miopenConvolutionMode_t c_mode = miopenConvolution;
 
   ConvolutionArgs args{ input, grad_output, grad_weight };
   args.handle = getMiopenHandle();
@@ -853,7 +856,7 @@ void raw_miopen_convolution_backward_weight_out(
   args.idesc.set(input);
   args.wdesc.set(grad_weight);
   args.odesc.set(grad_output);
-  args.cdesc.set(dataType, input.dim() - 2, args.params.padding, args.params.stride, args.params.dilation, args.params.groups);
+  args.cdesc.set(dataType, c_mode, input.dim() - 2, args.params.padding, args.params.stride, args.params.dilation, args.params.groups);
 
   miopenConvBwdWeightsAlgorithm_t bwdFilterAlg;
   Workspace workspace = chooseAlgorithm(args, benchmark, &bwdFilterAlg);

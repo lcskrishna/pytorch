@@ -957,6 +957,20 @@ Tensor miopen_depthwise_convolution_backward_input(
   return *grad_input;
 }
 
+Tensor miopen_depthwise_convolution_backward_input(
+    IntArrayRef input_size, const Tensor& grad_output_t, const Tensor& weight_t,
+    IntArrayRef padding, IntArrayRef stride, IntArrayRef dilation, int64_t groups,
+    bool benchmark, bool deterministic)
+{
+  TensorArg grad_output{ grad_output_t, "grad_output", 1 },
+            weight{ weight_t, "weight", 2 };
+  setMIOpenStreamToCurrent();
+  return miopen_depthwise_convolution_backward_input(
+      "miopen_depthwise_convolution_backward_input",
+      input_size, grad_output, weight,
+      padding, stride, dilation, groups, benchmark, deterministic);
+}
+
 std::tuple<at::Tensor,at::Tensor,at::Tensor> miopen_convolution_backward(
     const at::Tensor& input, const at::Tensor& grad_output_t, const at::Tensor& weight,
     IntArrayRef padding, IntArrayRef stride, IntArrayRef dilation, int64_t groups,
@@ -1174,7 +1188,7 @@ Tensor miopen_depthwise_convolution_backward_weight(
             input{ input_t, "input", 2 };
   setMIOpenStreamToCurrent();
   return miopen_depthwise_convolution_backward_weight(
-      "miopen_convolution_backward_weight",
+      "miopen_depthwise_convolution_backward_weight",
       weight_size, grad_output, input,
       padding, stride, dilation, groups, benchmark, deterministic);
 }

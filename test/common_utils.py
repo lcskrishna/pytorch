@@ -120,7 +120,7 @@ def skipIfRocm(fn):
             fn(*args, **kwargs)
     return wrapper
 
-def skipIRocmPy3(fn):
+def skipIfRocmPy3(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
         if TEST_WITH_ROCM:

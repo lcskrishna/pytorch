@@ -28,7 +28,7 @@ from common_methods_invocations import tri_tests_args, run_additional_tri_tests,
 from common_utils import TestCase, iter_indices, TEST_NUMPY, TEST_SCIPY, TEST_MKL, \
     TEST_LIBROSA, run_tests, download_file, skipIfNoLapack, suppress_warnings, \
     IS_WINDOWS, PY3, NO_MULTIPROCESSING_SPAWN, skipIfRocm, do_test_dtypes, do_test_empty_full, \
-    IS_SANDCASTLE, load_tests, brute_pdist, brute_cdist
+    IS_SANDCASTLE, load_tests, brute_pdist, brute_cdist, skipIfRocmPy3
 from multiprocessing.reduction import ForkingPickler
 
 # load_tests from common_utils is used to automatically filter tests for
@@ -5594,6 +5594,7 @@ class _TestTorchMixin(object):
         _test((10,), 5, 4, win_sizes=(11,), expected_error=RuntimeError)
         _test((10,), 5, 4, win_sizes=(1, 1), expected_error=RuntimeError)
 
+    @skipIfRocmPy3
     def test_stft(self):
         self._test_stft(self)
 

@@ -2209,6 +2209,7 @@ class TestCuda(TestCase):
         with self.assertRaisesRegex(RuntimeError, r"read-only property"):
             torch.backends.cuda.cufft_plan_cache.size = -1
 
+    @skipIfRocmPy3
     def test_stft(self):
         _TestTorchMixin._test_stft(self, device=torch.device('cuda'))
 

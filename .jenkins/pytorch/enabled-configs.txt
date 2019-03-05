@@ -43,6 +43,7 @@ pytorch-docker-build-test
 short-perf-test-cpu
 short-perf-test-gpu
 py2-clang7-rocmdeb-ubuntu16.04
+py3.6-clang7-rocmdeb-ubuntu16.04
 py2-devtoolset7-rocmrpm-centos7.5
 pytorch-ppc64le-cuda9.2-cudnn7-py3-build
 pytorch-ppc64le-cuda9.2-cudnn7-py3-test

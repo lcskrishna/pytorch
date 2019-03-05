@@ -89,6 +89,11 @@ if [[ "$BUILD_ENVIRONMENT" == *rocm* ]]; then
     export PATH="$CACHE_WRAPPER_DIR:$PATH"
   fi
 
+  ## Support for python3.6, update python to python3.6 if BUILD_ENVIRONMENT starts with py3.6
+  if [[ "$BUILD_ENVIRONMENT" == py3.6* ]]; then
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.6 10
+  fi
+
   python tools/amd_build/build_amd.py
   # OPENCV is needed to enable ImageInput operator in caffe2 resnet5_trainer
   # LMDB is needed to read datasets from https://download.caffe2.ai/databases/resnet_trainer.zip

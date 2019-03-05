@@ -17,7 +17,7 @@ from torch.utils.checkpoint import checkpoint, checkpoint_sequential
 import torch.hub as hub
 from torch.autograd._functions.utils import prepare_onnx_paddings
 from torch.autograd._functions.utils import check_onnx_broadcast
-from common_utils import IS_WINDOWS, IS_PPC, skipIfRocm, load_tests
+from common_utils import IS_WINDOWS, IS_PPC, skipIfRocm, load_tests, skipIfRocmPy3
 
 # load_tests from common_utils is used to automatically filter tests for
 # sharding on sandcastle. This line silences flake warnings
@@ -96,6 +96,7 @@ class TestCheckpoint(TestCase):
 
     # Test whether checkpoint is being triggered or not. For this, we check
     # the number of times forward pass happens
+    @skipIfRocmPy3
     def test_checkpoint_trigger(self):
 
         class Net(nn.Module):
@@ -143,6 +144,7 @@ class TestCheckpoint(TestCase):
                 outputs=[out], grad_outputs=[torch.ones(1, 5)], inputs=[input_var], create_graph=True
             )
 
+    @skipIfRocmPy3
     def test_checkpoint(self):
         model = nn.Sequential(
             nn.Linear(100, 50),
@@ -164,6 +166,7 @@ class TestCheckpoint(TestCase):
             torch.randn(1, 100, requires_grad=True)
         )
 
+    @skipIfRocmPy3
     def test_checkpoint_module_list_multiple_args(self):
         class ModuleListNet(nn.Module):
             def __init__(self):
@@ -200,6 +203,7 @@ class TestCheckpoint(TestCase):
             torch.randn(1, 60, requires_grad=True)
         )
 
+    @skipIfRocmPy3
     def test_checkpoint_rng_cpu(self):
         for i in range(5):
             inp = torch.randn(20000, device='cpu').requires_grad_()

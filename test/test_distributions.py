@@ -31,7 +31,7 @@ from random import shuffle
 
 import torch
 from torch._six import inf
-from common_utils import TestCase, run_tests, set_rng_seed, TEST_WITH_UBSAN, load_tests, skipIfRocm
+from common_utils import TestCase, run_tests, set_rng_seed, TEST_WITH_UBSAN, load_tests, skipIfRocm, skipIfRocmPy3
 from common_cuda import TEST_CUDA
 from torch.autograd import grad, gradcheck
 from torch.distributions import (Bernoulli, Beta, Binomial, Categorical,
@@ -4332,6 +4332,7 @@ class TestJit(TestCase):
             self.assertEqual(expected, actual, allow_inf=True,
                              message='{}\nExpected:\n{}\nActual:\n{}'.format(Dist.__name__, expected, actual))
 
+    @skipIfRocmPy3
     def test_variance(self):
         for Dist, keys, values, sample in self._examples():
             if Dist in [Cauchy, HalfCauchy]:

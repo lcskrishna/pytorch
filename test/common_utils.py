@@ -120,6 +120,14 @@ def skipIfRocm(fn):
             fn(*args, **kwargs)
     return wrapper
 
+def skipIRocmPy3(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if TEST_WITH_ROCM:
+            raise unittest.SkipTest("test doesn't currently work on the ROCm stack with python3.6")
+        else:
+            fn(*args, **kwargs)
+    return wrapper
 
 def skipIfNoLapack(fn):
     @wraps(fn)

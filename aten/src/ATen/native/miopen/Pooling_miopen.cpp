@@ -42,6 +42,21 @@ namespace at { namespace native {
 
 namespace at { namespace native {
 
+    //Calculate Pooling output shape.
+    static std::vector<int64_t> pooling_output_size(
+        IntArrayRef input_size, IntArrayRef kernel_size, IntArrayRef padding,
+        IntArrayRef stride, IntArrayRef dilation, bool ceil_mode)
+    {
+        auto dim = input_size.size();
+        std::vector<int64_t> output_size(dim);
+        output_size[0] = input_size[0]; // output batch_size = input batch_size
+        output_size[1] = input_size[1]; // output channel_dim = input channel_dim
+        for (size_t d = 2; d < dim ; ++d) {
+            output_size[d] = ((input_size[d] + 2 * padding[d - 2] - dilation[d - 2] * (kernel_size[d - 2] - 1) - 1 + (ceil_mode ? stride[d - 2] : 0))/ stride[d - 2] + 1);
+        }
+
+        return output_size;
+    }
 
     std::tuple<at::Tensor, at::Tensor> miopen_max_pool2d(
         const Tensor& input_t, IntArrayRef kernel_size, IntArrayRef stride,
@@ -53,6 +68,13 @@ namespace at { namespace native {
 
         checkAllDefined(c, {input});
 
+        //create output tensor.
+        auto output_t = at::empty(
+                            pooling_output_size(input->sizes(), kernel_size, padding, stride, dilation, ceil_mode), 
+                            input->options());
+
+        TensorArg output { output_t, "result", 0 };
+
         //Pooling mode.
         miopenPoolingMode_t mode = miopenPoolingMax;
         auto handle = getMiopenHandle();
@@ -60,6 +82,7 @@ namespace at { namespace native {
 
         //Input and output descriptors.
         TensorDescriptor idesc{ *input, 4}; //input descriptor
+        TensorDescriptor odesc{ *output, 4}; //output descriptor
         //TODO: calculate output shape of the pooling and create an output descriptor.
 
         //Pooling Descriptor.    
@@ -75,7 +98,6 @@ namespace at { namespace native {
       
         return output_t;
     }   
-
 
 }} //namespace at::native
 

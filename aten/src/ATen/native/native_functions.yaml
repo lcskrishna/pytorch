@@ -1513,6 +1513,11 @@
   dispatch:
     CUDA: miopen_depthwise_convolution_backward_weight
 
+- func: miopen_max_pool2d(Tensor self, int[] kernel_size, int[] stride, int[] padding, int[] dilation, bool ceil_mode) -> (Tensor, Tensor)
+  matches_jit_signature: True
+  dispatch:
+    CUDA: miopen_max_pool2d
+
 - func: mm(Tensor self, Tensor mat2) -> Tensor
   matches_jit_signature: True
   variants: function, method

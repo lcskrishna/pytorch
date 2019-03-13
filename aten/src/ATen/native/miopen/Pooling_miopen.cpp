@@ -58,6 +58,7 @@ namespace at { namespace native {
         return output_size;
     }
 
+    //Perform miopen max pool operation.
     std::tuple<at::Tensor, at::Tensor> miopen_max_pool2d(
         const Tensor& input_t, IntArrayRef kernel_size, IntArrayRef stride,
         IntArrayRef padding, IntArrayRef dilation, bool ceil_mode)
@@ -90,12 +91,12 @@ namespace at { namespace native {
         MIOPEN_CHECK(miopenSet2dPoolingDescriptor(pdesc, mode, kernel_size[0], kernel_size[1], padding[0], padding[1], stride[0], stride[1]));
  
         size_t ws_size;
-        miopenPoolingGetWorkspaceSize(odesc.desc(), &ws_size);
+        MIOPEN_CHECK(miopenPoolingGetWorkSpaceSize(odesc.desc(), &ws_size));
         auto indices_t = at::empty(output->sizes(), output->options());
         TensorArg indices {indices_t, "indices", 1};
 
-        Constant one(dataType, 1);
-        Constant zero(dataType, 0);
+        Constant one(datatype, 1);
+        Constant zero(datatype, 0);
        
         //Run miopen pooling forward and return the indices and the output tensor.
         MIOPEN_CHECK(miopenPoolingForward(handle, pdesc, &one, 
@@ -103,7 +104,7 @@ namespace at { namespace native {
                             &zero, odesc.desc(), output->data_ptr(),
                             true, indices->data_ptr(), ws_size));
         
-        return std::tuple<Tensor, Tensor>{output, indices};
+        return std::tuple<at::Tensor, at::Tensor>{output_t, indices_t};
     }   
 
 }} //namespace at::native

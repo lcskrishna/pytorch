@@ -6,7 +6,16 @@
 
 #include <tuple>
 
+static const int MIOPEN_DIM_MAX = 4;
+
 namespace at { namespace native {
+
+bool use_miopen(const at::Tensor& input) {
+    return ((input.type().scalarType() == at::kFloat)
+            && detail::getCUDAHooks().compiledWithMIOpen()
+            && input.is_cuda()
+            && input.dim() <= MIOPEN_DIM_MAX);	
+}
 
 static void check1d(
     const char* function_name,
@@ -114,9 +123,17 @@ Tensor max_pool2d(
     IntArrayRef padding,
     IntArrayRef dilation,
     bool ceil_mode) {
-  auto output_and_indices = at::max_pool2d_with_indices(
-      self, kernel_size, stride, padding, dilation, ceil_mode);
-  return std::get<0>(output_and_indices);
+ 
+  if (use_miopen(self)) {
+    Tensor output, indices;
+    auto output_and_indices = at::miopen_max_pool2d(
+        self, kernel_size, stride, padding, dilation, ceil_mode);
+    return std::get<0>(output_and_indices);
+  } else {
+    auto output_and_indices = at::max_pool2d_with_indices(
+        self, kernel_size, stride, padding, dilation, ceil_mode);
+    return std::get<0>(output_and_indices);
+  }
 }
 
 Tensor max_pool3d(

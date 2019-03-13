@@ -83,20 +83,27 @@ namespace at { namespace native {
         //Input and output descriptors.
         TensorDescriptor idesc{ *input, 4}; //input descriptor
         TensorDescriptor odesc{ *output, 4}; //output descriptor
-        //TODO: calculate output shape of the pooling and create an output descriptor.
 
         //Pooling Descriptor.    
         miopenPoolingDescriptor_t pdesc;
         miopenCreatePoolingDescriptor(&pdesc);
-        miopenSet2dPoolingDescriptor(pdesc, mode, kernel_size[0], kernel_size[1], padding[0], padding[1], stride[0], stride[1]);
+        MIOPEN_CHECK(miopenSet2dPoolingDescriptor(pdesc, mode, kernel_size[0], kernel_size[1], padding[0], padding[1], stride[0], stride[1]));
  
-        /*TODO:
-        Get pooling workspace size and assign memory for workspace (indices).
-        Need to cast the long tensor into int8 tensor for maxpooling (although it's slow until miopen1.8 release.) */
+        size_t ws_size;
+        miopenPoolingGetWorkspaceSize(odesc.desc(), &ws_size);
+        auto indices_t = at::empty(output->sizes(), output->options());
+        TensorArg indices {indices_t, "indices", 1};
 
+        Constant one(dataType, 1);
+        Constant zero(dataType, 0);
+       
         //Run miopen pooling forward and return the indices and the output tensor.
-      
-        return output_t;
+        MIOPEN_CHECK(miopenPoolingForward(handle, pdesc, &one, 
+                            idesc.desc(), input->data_ptr(),
+                            &zero, odesc.desc(), output->data_ptr(),
+                            true, indices->data_ptr(), ws_size));
+        
+        return std::tuple<Tensor, Tensor>{output, indices};
     }   
 
 }} //namespace at::native

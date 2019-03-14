@@ -9,11 +9,16 @@
 namespace at { namespace native {
 
     // See Note [ATen preprocessor philosophy]
-
     std::tuple<at::Tensor, at::Tensor> miopen_max_pool2d(
         const Tensor& self, IntArrayRef kernel_size, IntArrayRef stride, 
         IntArrayRef padding, IntArrayRef dilation, bool ceil_mode) {
       AT_ERROR("miopen_pooling: ATen not compiled with MIOpen support");
+    }
+
+    Tensor miopen_max_pool2d_backwards(
+        const Tensor& input, const at::Tensor& grad_output_t, at::Tensor indices_t, IntArrayRef kernel_size,
+        IntArrayRef stride, IntArrayRef padding, IntArrayRef dilation, bool ceil_mode) {
+      AT_ERROR("miopen_pooling_backward: ATen not compiled with MIOpen support");
     }                                  
 
 }}
@@ -105,7 +110,54 @@ namespace at { namespace native {
                             true, indices->data_ptr(), ws_size));
         
         return std::tuple<at::Tensor, at::Tensor>{output_t, indices_t};
-    }   
+    } 
+
+    //Perform miopen max pool backwards operation.
+    Tensor miopen_max_pool2d_backwards(
+        const Tensor& input_t,  const Tensor& grad_output_t, at::Tensor indices_t, IntArrayRef kernel_size,
+        IntArrayRef stride, IntArrayRef padding, IntArrayRef dilation, bool ceil_mode)
+    {
+        TensorArg input { input_t, "input", 1},
+                  grad_output { grad_output_t, "grad_output", 2},
+                  indices { indices_t, "indices", 3};
+
+        CheckedFrom c = "miopen_max_pool2d_backwards";
+        setMIOpenStreamToCurrent();
+
+        checkAllDefined(c, {input, grad_output, indices});
+        checkAllSameGPU(c, {input, grad_output, indices});
+
+        auto grad_input_t = at::empty(input->sizes(), input->options());
+        auto handle = getMiopenHandle();
+        auto datatype = getMiopenDataType(*input);
+    
+        TensorDescriptor idesc{ *input, 4};
+        TensorDescriptor odesc{ *grad_output, 4};
+        
+        grad_input_t = at::empty(input->sizes(), input->options());
+
+        //Pooling mode.
+        miopenPoolingMode_t mode = miopenPoolingMax;
+
+        //Pooling descriptor.
+        miopenPoolingDescriptor_t pdesc;
+        miopenCreatePoolingDescriptor(&pdesc);
+        MIOPEN_CHECK(miopenSet2dPoolingDescriptor(pdesc, mode, kernel_size[0], kernel_size[1], padding[0], padding[1], stride[0], stride[1]));
+        
+        Constant one(datatype, 1);
+        Constant zero(datatype, 0);
+
+        //Run MIOpen backward pooling.
+        MIOPEN_CHECK(miopenPoolingBackward(handle, pdesc, &one, 
+                        idesc.desc(), input->data_ptr(),
+                        odesc.desc(), grad_output->data_ptr(),
+                        idesc.desc(), input->data_ptr(),
+                        &zero, idesc.desc(), grad_input_t.data_ptr(),
+                        indices->data_ptr()));
+
+        return grad_input_t;
+                       
+    } 
 
 }} //namespace at::native
 

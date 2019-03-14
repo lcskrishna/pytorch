@@ -1513,10 +1513,15 @@
   dispatch:
     CUDA: miopen_depthwise_convolution_backward_weight
 
-- func: miopen_max_pool2d(Tensor self, int[] kernel_size, int[] stride, int[] padding, int[] dilation, bool ceil_mode) -> (Tensor, Tensor)
+- func: miopen_max_pooling(Tensor self, int[] kernel_size, int[] stride, int[] padding, int[] dilation, bool ceil_mode) -> (Tensor, Tensor)
   matches_jit_signature: True
   dispatch:
-    CUDA: miopen_max_pool2d
+    CUDA: miopen_max_pooling
+
+- func: miopen_max_pooling_backward(Tensor grad_output, Tensor self, int[] kernel_size, int[] stride, int[] padding, int[] dilation, bool ceil_mode, Tensor indices) -> Tensor
+  matches_jit_signature: True
+  dispatch:
+    CUDA: miopen_max_pooling_backward
 
 - func: mm(Tensor self, Tensor mat2) -> Tensor
   matches_jit_signature: True

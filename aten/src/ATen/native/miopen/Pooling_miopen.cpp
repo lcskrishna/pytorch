@@ -9,15 +9,15 @@
 namespace at { namespace native {
 
     // See Note [ATen preprocessor philosophy]
-    std::tuple<at::Tensor, at::Tensor> miopen_max_pool2d(
+    std::tuple<Tensor, Tensor> miopen_max_pooling(
         const Tensor& self, IntArrayRef kernel_size, IntArrayRef stride, 
         IntArrayRef padding, IntArrayRef dilation, bool ceil_mode) {
       AT_ERROR("miopen_pooling: ATen not compiled with MIOpen support");
     }
 
-    Tensor miopen_max_pool2d_backwards(
-        const Tensor& input, const at::Tensor& grad_output_t, at::Tensor indices_t, IntArrayRef kernel_size,
-        IntArrayRef stride, IntArrayRef padding, IntArrayRef dilation, bool ceil_mode) {
+    Tensor miopen_max_pooling_backward(
+        const Tensor& grad_output, const at::Tensor& input_t, IntArrayRef kernel_size,
+        IntArrayRef stride, IntArrayRef padding, IntArrayRef dilation, bool ceil_mode, const Tensor& indices_t) {
       AT_ERROR("miopen_pooling_backward: ATen not compiled with MIOpen support");
     }                                  
 
@@ -64,7 +64,7 @@ namespace at { namespace native {
     }
 
     //Perform miopen max pool operation.
-    std::tuple<at::Tensor, at::Tensor> miopen_max_pool2d(
+    std::tuple<at::Tensor, at::Tensor> miopen_max_pooling(
         const Tensor& input_t, IntArrayRef kernel_size, IntArrayRef stride,
         IntArrayRef padding, IntArrayRef dilation, bool ceil_mode)
     {
@@ -74,12 +74,12 @@ namespace at { namespace native {
 
         checkAllDefined(c, {input});
 
-        //create output tensor.
-        auto output_t = at::empty(
-                            pooling_output_size(input->sizes(), kernel_size, padding, stride, dilation, ceil_mode), 
-                            input->options());
-
+        //create output and indices tensor.
+        auto output_t = at::empty(pooling_output_size(input->sizes(), kernel_size, padding, stride, dilation, ceil_mode), input->options());
         TensorArg output { output_t, "result", 0 };
+        auto indices_t = at::empty(output->sizes(), output->options());
+        TensorArg indices { indices_t, "indices", 1};
+	
 
         //Pooling mode.
         miopenPoolingMode_t mode = miopenPoolingMax;
@@ -94,11 +94,10 @@ namespace at { namespace native {
         miopenPoolingDescriptor_t pdesc;
         miopenCreatePoolingDescriptor(&pdesc);
         MIOPEN_CHECK(miopenSet2dPoolingDescriptor(pdesc, mode, kernel_size[0], kernel_size[1], padding[0], padding[1], stride[0], stride[1]));
- 
+
+        //Get pooling workspace size. 
         size_t ws_size;
         MIOPEN_CHECK(miopenPoolingGetWorkSpaceSize(odesc.desc(), &ws_size));
-        auto indices_t = at::empty(output->sizes(), output->options());
-        TensorArg indices {indices_t, "indices", 1};
 
         Constant one(datatype, 1);
         Constant zero(datatype, 0);
@@ -112,52 +111,52 @@ namespace at { namespace native {
         return std::tuple<at::Tensor, at::Tensor>{output_t, indices_t};
     } 
 
-    //Perform miopen max pool backwards operation.
-    Tensor miopen_max_pool2d_backwards(
-        const Tensor& input_t,  const Tensor& grad_output_t, at::Tensor indices_t, IntArrayRef kernel_size,
-        IntArrayRef stride, IntArrayRef padding, IntArrayRef dilation, bool ceil_mode)
+    //Perform miopen maxpooling backwards.
+    Tensor miopen_max_pooling_backward(
+        const Tensor& grad_output_t, const Tensor& input_t, IntArrayRef kernel_size, IntArrayRef stride,
+        IntArrayRef padding, IntArrayRef dilation, bool ceil_mode, const Tensor& indices_t)
     {
-        TensorArg input { input_t, "input", 1},
-                  grad_output { grad_output_t, "grad_output", 2},
-                  indices { indices_t, "indices", 3};
+        TensorArg grad_output {grad_output_t, "grad_output", 1},
+                  input {input_t, "input", 2},
+                  indices {indices_t, "indices", 3};
 
-        CheckedFrom c = "miopen_max_pool2d_backwards";
+        CheckedFrom c = "miopen_max_pooling_backwards";
         setMIOpenStreamToCurrent();
-
-        checkAllDefined(c, {input, grad_output, indices});
-        checkAllSameGPU(c, {input, grad_output, indices});
+        
+        checkAllDefined(c, {grad_output, input, indices});
+        checkAllSameGPU(c, {grad_output, input, indices});
 
         auto grad_input_t = at::empty(input->sizes(), input->options());
+        auto output_t = at::empty(input->sizes(), input->options());
+        
+        
         auto handle = getMiopenHandle();
         auto datatype = getMiopenDataType(*input);
-    
+
+        TensorDescriptor godesc{ *grad_output, 4};
         TensorDescriptor idesc{ *input, 4};
-        TensorDescriptor odesc{ *grad_output, 4};
-        
-        grad_input_t = at::empty(input->sizes(), input->options());
 
         //Pooling mode.
         miopenPoolingMode_t mode = miopenPoolingMax;
-
+        
         //Pooling descriptor.
         miopenPoolingDescriptor_t pdesc;
         miopenCreatePoolingDescriptor(&pdesc);
         MIOPEN_CHECK(miopenSet2dPoolingDescriptor(pdesc, mode, kernel_size[0], kernel_size[1], padding[0], padding[1], stride[0], stride[1]));
-        
+
         Constant one(datatype, 1);
         Constant zero(datatype, 0);
 
-        //Run MIOpen backward pooling.
-        MIOPEN_CHECK(miopenPoolingBackward(handle, pdesc, &one, 
+        //Run MIOpen backward Pooling.
+        MIOPEN_CHECK(miopenPoolingBackward(handle, pdesc, &one,
                         idesc.desc(), input->data_ptr(),
-                        odesc.desc(), grad_output->data_ptr(),
-                        idesc.desc(), input->data_ptr(),
-                        &zero, idesc.desc(), grad_input_t.data_ptr(),
-                        indices->data_ptr()));
-
-        return grad_input_t;
-                       
-    } 
+                        godesc.desc(), grad_output->data_ptr(),
+                        idesc.desc(), output_t.data_ptr(),
+                        &zero, idesc.desc(), grad_input_t.data_ptr(), indices->data_ptr()                 
+                        ));
+                
+        return grad_input_t;               
+    }
 
 }} //namespace at::native
 

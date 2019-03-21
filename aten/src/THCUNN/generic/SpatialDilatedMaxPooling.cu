@@ -5,6 +5,32 @@
 #include <THCUNN/common.h>
 #include <THCUNN/generic/pooling_shape.h>
 #include <ATen/cuda/CUDAContext.h>
+#include <ATen/ATen.h>
+#include <ATen/NativeFunctions.h>
+#include <ATen/TensorUtils.h>
+#include <c10/util/Exception.h>
+
+#include <tuple>
+
+#include <THH/THH.h>
+
+#include <ATen/miopen/miopen-wrapper.h>
+#include <ATen/miopen/Descriptors.h>
+#include <ATen/miopen/Types.h>
+#include <ATen/miopen/Utils.h>
+
+#include <ATen/TensorUtils.h>
+
+#include <functional>
+#include <iterator>
+#include <sstream>
+#include <algorithm>
+#include <memory>
+#include <mutex>
+#include <stdint.h>
+#include <unordered_map>
+
+#include <iostream>
 
 static inline void THNN_(SpatialDilatedMaxPooling_shapeCheck)(
                          THCState *state,
@@ -113,15 +139,58 @@ void THNN_(SpatialDilatedMaxPooling_updateOutput)(
   scalar_t* output_data = THCTensor_(data)(state, output);
 
   int count = THCTensor_(nElement)(state, output);
+#if defined (__HIP_PLATFORM_HCC__)
+  int kernel_size[2] = {kH, kW};
+  int stride[2] = {dH, dW};
+  int padding[2] = {padH, padW};
+  int dilation[2] = {dilationH, dilationW};
 
+  //Write an miopen implementation.
+  miopenPoolingMode_t mode = miopenPoolingMax;
+  auto handle = at::native::getMiopenHandle();
+  miopenDataType_t datatype = miopenFloat;
+
+  //Input and output tensor descriptors.
+  miopenTensorDescriptor_t idesc;
+  miopenTensorDescriptor_t odesc;
+  miopenCreateTensorDescriptor(&idesc);
+  miopenCreateTensorDescriptor(&odesc);
+
+  miopenSet4dTensorDescriptor(idesc, datatype, batchSize, nInputPlane, nInputCols, nInputRows);
+  miopenSet4dTensorDescriptor(odesc, datatype, batchSize, nInputPlane, nOutputCols, nOutputRows);
+
+  //Pooling Descriptor.
+  miopenPoolingDescriptor_t pdesc;
+  miopenCreatePoolingDescriptor(&pdesc);
+  miopenSet2dPoolingDescriptor(pdesc, mode, kH, kW, padH, padW, dH, dW);
+
+  //Get workspace size.
+  size_t ws_size;
+  miopenPoolingGetWorkSpaceSize(odesc, &ws_size);
+
+  at::native::Constant one(datatype, 1);
+  at::native::Constant zero(datatype, 0);
+
+  miopenPoolingForward(handle, pdesc, &one, idesc, (void *) input_data, &zero, odesc, (void *) output_data, true, indices_data, ws_size);
+
+
+  //Destroy descriptors.
+  miopenDestroyPoolingDescriptor(pdesc);
+  miopenDestroyTensorDescriptor(odesc);
+  miopenDestroyTensorDescriptor(idesc);
+
+
+#else
   MaxPoolForward<scalar_t, accreal> <<< GET_BLOCKS(count), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state) >>>
       (count, input_data,
       batchSize, nInputPlane, nInputRows, nInputCols, nOutputRows, nOutputCols,
       kH, kW, dH, dW, padH, padW, dilationH, dilationW, output_data, indices_data);
   THCudaCheck(cudaGetLastError());
-
+#endif
   if(input->dim() == 3)
     THCTensor_(resize3d)(state, output, nInputPlane, nOutputRows, nOutputCols);
+
+
 
   THCTensor_(free)(state, input);
 }

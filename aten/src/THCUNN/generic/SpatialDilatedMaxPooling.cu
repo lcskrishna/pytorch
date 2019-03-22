@@ -172,13 +172,13 @@ void THNN_(SpatialDilatedMaxPooling_updateOutput)(
   at::native::Constant zero(datatype, 0);
 
   miopenPoolingForward(handle, pdesc, &one, idesc, (void *) input_data, &zero, odesc, (void *) output_data, true, indices_data, ws_size);
+  indices_data = (THCIndex_t *) indices_data;
 
 
   //Destroy descriptors.
   miopenDestroyPoolingDescriptor(pdesc);
   miopenDestroyTensorDescriptor(odesc);
   miopenDestroyTensorDescriptor(idesc);
-
 
 #else
   MaxPoolForward<scalar_t, accreal> <<< GET_BLOCKS(count), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state) >>>
@@ -249,6 +249,44 @@ void THNN_(SpatialDilatedMaxPooling_updateGradInput)(
   uint64_t maxGridZ = at::cuda::getCurrentDeviceProperties()->maxGridSize[2];
   if (maxGridY < grid.y) grid.y = maxGridY;
   if (maxGridZ < grid.z) grid.z = maxGridZ;
+
+#if defined (__HIP_PLATFORM_HCC__)
+  
+  miopenPoolingMode_t mode = miopenPoolingMax;
+  auto handle = at::native::getMiopenHandle();
+  miopenDataType_t datatype = miopenFloat;
+
+  scalar_t * input_data = THCTensor_(data)(state, input);
+  scalar_t * gradOutput_data = THCTensor_(data)(state, gradOutput);
+  scalar_t * indices_data = THCTensor_(data)(state, indices);
+  scalar_t * grad_input_data = THCTensor_(data)(state, gradInput);
+  scalar_t * output_data = THCTensor_(data)(state, input);
+
+  //Create tensor descriptors.
+  miopenTensorDescriptor_t yDesc, dyDesc, xDesc, dxDesc; 
+  miopenCreateTensorDescriptor(&yDesc);
+  miopenCreateTensorDescriptor(&dyDesc);
+  miopenCreateTensorDescriptor(&xDesc);
+  miopenCreateTensorDescriptor(&dxDesc);
+
+  miopenSet4dTensorDescriptor(yDesc, datatype, batchSize, nInputPlane, nInputCols, nInputRows);
+  miopenSet4dTensorDescriptor(dyDesc, datatype, batchSize, nInputPlane, nInputCols, nInputRows);
+  miopenSet4dTensorDescriptor(xDesc, datatype, batchSize, nInputPlane, nOutputCols, nOutputRows);
+  miopenSet4dTensorDescriptor(dxDesc, datatype, batchSize, nInputPlane, nOutputCols, nOutputRows);
+
+  //Pooling descriptor.
+  miopenPoolingDescriptor_t pdesc;
+  miopenCreatePoolingDescriptor(&pdesc);
+  miopenSet2dPoolingDescriptor(pdesc, mode, kH, kW, padH, padW, dH, dW);
+
+  //Constants.
+  at::native::Constant one(datatype, 1);
+  at::native::Constant zero(datatype, 0);
+
+  miopenPoolingBackward(handle, pdesc, &one, yDesc, (void *)input_data, dyDesc, (void *) gradOutput_data, xDesc, (void *) output_data, &zero, dxDesc, 
+                      (void *) grad_input_data, (void *) indices_data );
+
+#else  
   MaxPoolBackward<scalar_t, accreal> <<< grid, BACKWARD_THREADS, 0, THCState_getCurrentStream(state) >>>
       (count,
       THCTensor_(data)(state, gradOutput),
@@ -257,6 +295,7 @@ void THNN_(SpatialDilatedMaxPooling_updateGradInput)(
       kH, kW, dH, dW, padH, padW, dilationH, dilationW,
       THCTensor_(data)(state, gradInput));
   THCudaCheck(cudaGetLastError());
+#endif
 
   THCTensor_(free)(state, gradOutput);
 

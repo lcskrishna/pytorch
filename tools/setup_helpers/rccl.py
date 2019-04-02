@@ -14,7 +14,9 @@ RCCL_SYSTEM_LIB = None
 RCCL_INCLUDE_DIR = None
 RCCL_ROOT_DIR = None
 LIBRCCL_PREFIX = "librccl"
-if USE_ROCM and not IS_DARWIN and not IS_WINDOWS and not check_negative_env_flag('USE_RCCL'):
+
+# FIXME: Temporarily disable USE_RCCL until it's ready
+if False and USE_ROCM and not IS_DARWIN and not IS_WINDOWS and not check_negative_env_flag('USE_RCCL'):
    ENV_ROOT = os.getenv('RCCL_ROOT_DIR', None)
    LIB_DIR = os.getenv('RCCL_LIB_DIR', None)
    INCLUDE_DIR = os.getenv('RCCL_INCLUDE_DIR', None)

@@ -635,7 +635,10 @@ def compare_cpu_gpu(tensor_constructor, arg_constructor, fn, t, precision=1e-5):
             gpu_result = getattr(gpu_tensor, fn)(*gpu_args)
         except RuntimeError as e:
             reason = e.args[0]
-            if 'only supports floating-point types' in reason or 'unimplemented data type' in reason:
+            data_type_reasons = {'only supports floating-point types',
+                                 'unimplemented data type',
+                                 'not implemented for'}
+            if any(data_type_reason in reason for data_type_reason in data_type_reasons):
                 raise unittest.SkipTest('unimplemented data type')
             raise
         except AttributeError as e:
@@ -1046,6 +1049,9 @@ class TestCuda(TestCase):
     def test_isinf(self):
         _TestTorchMixin._test_isinf(self, lambda t: t.cuda())
 
+    def test_inplace_unary_mem_overlap(self):
+        _TestTorchMixin._test_inplace_unary_mem_overlap(self, device='cuda')
+
     @unittest.skipIf(not TEST_LARGE_TENSOR, "not enough memory")
     def test_arithmetic_large_tensor(self):
         x = torch.empty(2**30, device='cuda')
@@ -1128,7 +1134,6 @@ class TestCuda(TestCase):
 
     @unittest.skipIf(not TEST_MULTIGPU, "only one GPU detected")
     # Note: fails sometimes on the CI, passes on dual gfx906
-    @skipIfRocm
     def test_broadcast_coalesced(self):
         numel = 5
         num_bytes = numel * 8
@@ -1199,6 +1204,7 @@ class TestCuda(TestCase):
             self.assertEqual(t._version, old_version + 1)
 
     @unittest.skipIf(not TEST_MULTIGPU, "only one GPU detected")
+    @skipIfRocm
     def test_reduce_add_coalesced(self):
         numel = 5
         num_bytes = numel * 8
@@ -1296,6 +1302,7 @@ class TestCuda(TestCase):
     def test_gather(self):
         self._test_gather(0)
 
+    @skipIfRocm
     def test_gather_dim(self):
         self._test_gather(1)
 
@@ -2133,19 +2140,19 @@ class TestCuda(TestCase):
 
     @unittest.skipIf(not TEST_MAGMA, "no MAGMA library detected")
     def test_det_logdet_slogdet(self):
-        _TestTorchMixin._test_det_logdet_slogdet(self, lambda t: t.cuda())
+        _TestTorchMixin._test_det_logdet_slogdet(self, 'cuda')
 
     @unittest.skipIf(not TEST_MAGMA, "no MAGMA library detected")
-    def test_gesv(self):
-        _TestTorchMixin._test_gesv(self, lambda t: t.cuda())
+    def test_solve(self):
+        _TestTorchMixin._test_solve(self, lambda t: t.cuda())
 
     @unittest.skipIf(not TEST_MAGMA, "no MAGMA library detected")
-    def test_gesv_batched(self):
-        _TestTorchMixin._test_gesv_batched(self, lambda t: t.cuda())
+    def test_solve_batched(self):
+        _TestTorchMixin._test_solve_batched(self, lambda t: t.cuda())
 
     @unittest.skipIf(not TEST_MAGMA, "no MAGMA library detected")
-    def test_gesv_batched_dims(self):
-        _TestTorchMixin._test_gesv_batched_dims(self, lambda t: t.cuda())
+    def test_solve_batched_dims(self):
+        _TestTorchMixin._test_solve_batched_dims(self, lambda t: t.cuda())
 
     @unittest.skipIf(not TEST_MAGMA, "no MAGMA library detected")
     def test_cholesky_solve(self):
@@ -2352,15 +2359,21 @@ class TestCuda(TestCase):
     def test_advancedindex_big(self):
         _TestTorchMixin._test_advancedindex_big(self, lambda t: t.cuda())
 
-    @skipIfRocm
-    def test_btrifact(self):
-        _TestTorchMixin._test_btrifact(self, lambda t: t.cuda())
+    def test_kthvalue(self):
+        _TestTorchMixin._test_kthvalue(self, device='cuda')
 
     @skipIfRocm
+    @unittest.skipIf(not TEST_MAGMA, "no MAGMA library detected")
+    def test_lu(self):
+        _TestTorchMixin._test_lu(self, lambda t: t.cuda())
+
+    @skipIfRocm
+    @unittest.skipIf(not TEST_MAGMA, "no MAGMA library detected")
     def test_btrisolve(self):
         _TestTorchMixin._test_btrisolve(self, lambda t: t.cuda())
 
     @skipIfRocm
+    @unittest.skipIf(not TEST_MAGMA, "no MAGMA library detected")
     def test_btriunpack(self):
         _TestTorchMixin._test_btriunpack(self, lambda t: t.cuda())
 
@@ -2530,6 +2543,9 @@ class TestCuda(TestCase):
         b = torch.logspace(1, 10, 10)
         self.assertEqual(a, b.cuda())
 
+    def test_lerp(self):
+        _TestTorchMixin._test_lerp(self, lambda t: t.cuda())
+
     def test_diagonal(self):
         _TestTorchMixin._test_diagonal(self, dtype=torch.float32, device='cuda')
 
@@ -2550,8 +2566,16 @@ class TestCuda(TestCase):
         _TestTorchMixin._test_geqrf(self, lambda t: t.cuda())
 
     @unittest.skipIf(not TEST_MAGMA, "no MAGMA library detected")
-    def test_trtrs(self):
-        _TestTorchMixin._test_trtrs(self, lambda t: t.cuda())
+    def test_triangular_solve(self):
+        _TestTorchMixin._test_triangular_solve(self, lambda t: t.cuda())
+
+    @unittest.skipIf(not TEST_MAGMA, "no MAGMA library detected")
+    def test_triangular_solve_batched(self):
+        _TestTorchMixin._test_triangular_solve_batched(self, lambda t: t.cuda())
+
+    @unittest.skipIf(not TEST_MAGMA, "no MAGMA library detected")
+    def test_triangular_solve_batched_dims(self):
+        _TestTorchMixin._test_triangular_solve_batched_dims(self, lambda t: t.cuda())
 
     @unittest.skipIf(not TEST_MULTIGPU, "only one GPU detected")
     def test_get_set_rng_state_all(self):
@@ -2697,6 +2721,21 @@ class TestCuda(TestCase):
 
     def test_triu_tril(self):
         _TestTorchMixin._test_triu_tril(self, lambda t: t.cuda())
+
+    def test_cuda_round(self):
+        # test half-to-even
+        a = [-5.8, -3.5, -2.3, -1.5, -0.5, 0.5, 1.5, 2.3, 3.5, 5.8]
+        res = [-6., -4., -2., -2., 0., 0., 2., 2., 4., 6.]
+
+        self.assertEqual(
+            torch.HalfTensor(a).cuda().round().cpu(),
+            torch.HalfTensor(res).cpu())
+        self.assertEqual(
+            torch.FloatTensor(a).cuda().round().cpu(),
+            torch.FloatTensor(res).cpu())
+        self.assertEqual(
+            torch.DoubleTensor(a).cuda().round().cpu(),
+            torch.DoubleTensor(res).cpu())
 
 
 def load_ignore_file():

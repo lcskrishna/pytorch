@@ -519,7 +519,11 @@ def include_paths(cuda=False):
         os.path.join(lib_include, 'THC')
     ]
     if cuda:
-        paths.append(_join_cuda_home('include'))
+        cuda_home_include = _join_cuda_home('include')
+        # if we have the Debian/Ubuntu packages for cuda, we get /usr as cuda home.
+        # but gcc dosn't like having /usr/include passed explicitly
+        if cuda_home_include != '/usr/include':
+            paths.append(cuda_home_include)
         if CUDNN_HOME is not None:
             paths.append(os.path.join(CUDNN_HOME, 'include'))
     return paths
@@ -1022,6 +1026,7 @@ def _write_ninja_file(path,
         cuda_flags = common_cflags + COMMON_NVCC_FLAGS
         if IS_WINDOWS:
             cuda_flags = _nt_quote_args(cuda_flags)
+            cuda_flags += _nt_quote_args(extra_cuda_cflags)
         else:
             cuda_flags += ['--compiler-options', "'-fPIC'"]
             cuda_flags += extra_cuda_cflags

@@ -77,9 +77,9 @@ namespace at { namespace native {
         //create output and indices tensor.
         auto output_t = at::empty(pooling_output_size(input->sizes(), kernel_size, padding, stride, dilation, ceil_mode), input->options());
         TensorArg output { output_t, "result", 0 };
-        auto indices_t = at::empty(output->sizes(), output->options());
+        //auto indices_t = at::empty(output->sizes(), output->options());
+        auto indices_t = at::empty(output->sizes(), output->options().dtype(kLong));
         TensorArg indices { indices_t, "indices", 1};
-	
 
         //Pooling mode.
         miopenPoolingMode_t mode = miopenPoolingMax;
@@ -97,19 +97,19 @@ namespace at { namespace native {
 
         //Get pooling workspace size. 
         size_t ws_size;
-        MIOPEN_CHECK(miopenPoolingGetWorkSpaceSize(odesc.desc(), &ws_size));
+        miopenIndexType_t index_type = miopenIndexUint64;
+        miopenSetPoolingIndexType(pdesc, index_type);
+        MIOPEN_CHECK(miopenPoolingGetWorkSpaceSizeV2(pdesc, odesc.desc(), &ws_size));
 
         Constant one(datatype, 1);
         Constant zero(datatype, 0);
-
-        //Type& longType = indices_t.type().toScalarType(kLong);
        
         //Run miopen pooling forward and return the indices and the output tensor.
         MIOPEN_CHECK(miopenPoolingForward(handle, pdesc, &one, 
                             idesc.desc(), input->data_ptr(),
                             &zero, odesc.desc(), output->data_ptr(),
                             true, indices->data_ptr(), ws_size));
-        
+
         //return std::tuple<at::Tensor, at::Tensor>{output_t, indices_t.toType(kLong)};
         return std::tuple<at::Tensor, at::Tensor>{output_t, indices_t};
     } 
@@ -131,8 +131,7 @@ namespace at { namespace native {
 
         auto grad_input_t = at::empty(input->sizes(), input->options());
         auto output_t = at::empty(input->sizes(), input->options());
-        
-        
+           
         auto handle = getMiopenHandle();
         auto datatype = getMiopenDataType(*input);
 
@@ -146,6 +145,12 @@ namespace at { namespace native {
         miopenPoolingDescriptor_t pdesc;
         miopenCreatePoolingDescriptor(&pdesc);
         MIOPEN_CHECK(miopenSet2dPoolingDescriptor(pdesc, mode, kernel_size[0], kernel_size[1], padding[0], padding[1], stride[0], stride[1]));
+
+        //Get pooling workspace size. 
+        size_t ws_size;
+        miopenIndexType_t index_type = miopenIndexUint64;
+        miopenSetPoolingIndexType(pdesc, index_type);
+        MIOPEN_CHECK(miopenPoolingGetWorkSpaceSizeV2(pdesc, godesc.desc(), &ws_size));
 
         Constant one(datatype, 1);
         Constant zero(datatype, 0);

@@ -77,9 +77,10 @@ namespace at { namespace native {
         //create output and indices tensor.
         auto output_t = at::empty(pooling_output_size(input->sizes(), kernel_size, padding, stride, dilation, ceil_mode), input->options());
         TensorArg output { output_t, "result", 0 };
+
         //auto indices_t = at::empty(output->sizes(), output->options());
         auto indices_t = at::empty(output->sizes(), output->options().dtype(kLong));
-        TensorArg indices { indices_t, "indices", 1};
+        TensorArg indices {indices_t, "indices", 2};
 
         //Pooling mode.
         miopenPoolingMode_t mode = miopenPoolingMax;
@@ -130,12 +131,16 @@ namespace at { namespace native {
         checkAllSameGPU(c, {grad_output, input, indices});
 
         auto grad_input_t = at::empty(input->sizes(), input->options());
-        auto output_t = at::empty(input->sizes(), input->options());
+        auto output_t = at::empty(pooling_output_size(input->sizes(), kernel_size, padding, stride, dilation, ceil_mode), grad_output->options());
+
+        TensorArg grad_input {grad_input_t, "grad_input", 0};
+        TensorArg output {output_t, "output", 4};
            
         auto handle = getMiopenHandle();
         auto datatype = getMiopenDataType(*input);
 
         TensorDescriptor godesc{ *grad_output, 4};
+        TensorDescriptor odesc {*output, 4};
         TensorDescriptor idesc{ *input, 4};
 
         //Pooling mode.
@@ -157,13 +162,13 @@ namespace at { namespace native {
 
         //Run MIOpen backward Pooling.
         MIOPEN_CHECK(miopenPoolingBackward(handle, pdesc, &one,
-                        idesc.desc(), input->data_ptr(),
+                        odesc.desc(), output->data_ptr(),
                         godesc.desc(), grad_output->data_ptr(),
-                        idesc.desc(), output_t.data_ptr(),
-                        &zero, idesc.desc(), grad_input_t.data_ptr(), indices->data_ptr()                 
+                        idesc.desc(), input->data_ptr(), &zero, 
+                        idesc.desc(), grad_input->data_ptr(), indices->data_ptr()                 
                         ));
                 
-        return grad_input_t;               
+        return grad_input_t;
     }
 
 }} //namespace at::native

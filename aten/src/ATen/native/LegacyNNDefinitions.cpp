@@ -430,7 +430,7 @@ Tensor & max_pool2d_with_indices_backward_out(Tensor & grad_input, const Tensor 
 
 Tensor max_pool2d_with_indices_backward(const Tensor & grad_output, const Tensor & self, IntArrayRef kernel_size, IntArrayRef stride, IntArrayRef padding, IntArrayRef dilation, bool ceil_mode, const Tensor & indices) {
   if (self.is_cuda() && detail::getCUDAHooks().compiledWithMIOpen() && ((self.scalar_type() == at::kFloat) || (self.scalar_type() == at::kHalf))
-          && !(dilation[0] >=1 || dilation[1] >= 1)) {
+          && !(dilation[0] > 1 || dilation[1] > 1)) {
     return at::miopen_max_pooling_backward(grad_output.contiguous(), self.contiguous(), kernel_size, stride, padding, dilation, ceil_mode, indices.contiguous());
   }
   return at::legacy::th::_thnn_max_pool2d_with_indices_backward(grad_output, self, kernel_size, stride, padding, dilation, ceil_mode, indices);

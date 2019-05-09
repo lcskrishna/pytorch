@@ -296,6 +296,67 @@ int64_t _num_linear_layers(miopenRNNMode_t mode) {
 	}
 }
 
+  // This is a lightweight version of the method above used to quickly get the expected
+  // parameter offsets.
+ std::vector<void*> get_expected_data_ptrs(
+        const Tensor& weight_buf, miopenHandle_t handle, const RNNDescriptorParams& rnn,
+        const RNNDescriptor& rnn_desc, const TensorDescriptor& x_desc, miopenDataType_t datatype) {
+    FilterDescriptor w_desc;
+    w_desc.set(weight_buf, 3);
+
+    int64_t num_linear_layers = _num_linear_layers(rnn.rnn_mode);
+    int64_t num_dir_layers = rnn.num_directions() * rnn.num_layers;
+    std::vector<void*> data_ptrs;
+    data_ptrs.reserve(num_dir_layers * 2 * 2);
+    for (int64_t layer = 0; layer < num_dir_layers; layer++) {
+    
+        const std::array<int64_t, 2> linear_offsets = { 0, num_linear_layers / 2 };
+        for (int64_t linear_id : linear_offsets) {
+          FilterDescriptor lin_layer_mat_desc;
+          void* matrix_pointer;
+          size_t param_size;
+          MIOPEN_CHECK(miopenGetRNNLayerParamSize(handle, rnn_desc.desc(), layer, x_desc.desc(), linear_id, &param_size));
+          MIOPEN_CHECK(miopenGetRNNLayerParam(
+                handle,
+                rnn_desc.desc(),
+                layer,
+                x_desc.desc(),
+                w_desc.desc(),
+                weight_buf.data_ptr(),
+                linear_id,
+                lin_layer_mat_desc.mut_desc(),
+                matrix_pointer
+                ));
+          data_ptrs.push_back(matrix_pointer);
+        }
+    }
+
+    for (int64_t layer = 0; layer < num_dir_layers; layer++) {
+
+        const std::array<int64_t, 2> linear_offsets = { 0, num_linear_layers / 2 };
+        for (int64_t linear_id : linear_offsets) {
+          FilterDescriptor lin_layer_mat_desc;
+          void* matrix_pointer;
+          size_t param_size;
+          MIOPEN_CHECK(miopenGetRNNLayerBiasSize(handle, rnn_desc.desc(), layer, linear_id, &param_size));
+          MIOPEN_CHECK(miopenGetRNNLayerBias(
+                handle,
+                rnn_desc.desc(),
+                layer,
+                x_desc.desc(),
+                w_desc.desc(),
+                weight_buf.data_ptr(),
+                linear_id,
+                lin_layer_mat_desc.mut_desc(),
+                matrix_pointer
+                ));
+          data_ptrs.push_back(matrix_pointer);
+        }
+    }
+
+    return data_ptrs;
+}
+
 std::pair<std::vector<Tensor>, size_t> get_parameters(miopenHandle_t handle, const RNNDescriptorParams& rnn,
 					const RNNDescriptor& rnn_desc, const TensorDescriptor& x_desc, const FilterDescriptor& w_desc,
 					const Tensor& weight_buf)
@@ -484,11 +545,6 @@ std::tuple<Tensor, Tensor, Tensor, Tensor, Tensor> miopen_rnn(
     auto input = input_r;
     auto weight_buf = weight_buf_r;
     
-
-    if (fn_dropout_state.defined()) {
-    	AT_ERROR("miopen_rnn : Dropout is not supported in MIOpen. ");
-    }
-
     RNNParams fn;
     auto datatype = getMiopenDataType(input);
     miopenRNNBiasMode_t bias_mode = (weight_stride0 == 4) ? miopenRNNwithBias : miopenRNNNoBias;
@@ -832,20 +888,136 @@ std::tuple<Tensor, Tensor, Tensor, std::vector<Tensor>> miopen_rnn_backward(
 
 namespace {
 
+std::tuple<Tensor, Tensor> unpack_hidden(const Tensor& hidden) {
+	return std::make_tuple(hidden, at::Tensor{});
+}
+
+std::tuple<Tensor, Tensor> unpack_hidden(const std::tuple<Tensor, Tensor>& hidden) {
+	return hidden;
+}
+
+template<typename hidden_type>
+hidden_type pack_hidden(const Tensor& hx, const Tensor& cx) {
+  static_assert(std::is_same<hidden_type, void>::value, "pack_hidden not implemented for this type");
+  AT_ERROR("NOT IMPLEMENTED");
+}
+
+template<>
+Tensor pack_hidden<Tensor>(const Tensor& hx, const Tensor& cx) {
+  AT_ASSERT(cx.numel() == 0);
+  return hx;
+}
+
+template<>
+std::tuple<Tensor, Tensor> pack_hidden<std::tuple<Tensor, Tensor>>(const Tensor& hx, const Tensor& cx) {
+  return std::make_tuple(hx, cx);
+}
+
+Tensor try_get_weight_buf(
+      const Tensor& input, TensorList parameters, bool has_biases,
+      miopenRNNMode_t mode, int64_t hidden_size, int64_t num_layers, bool bidirectional) {
+  // Prepare all relevant descriptors
+  auto handle = getMiopenHandle();
+  auto datatype = getMiopenDataType(input);
+
+  RNNDescriptorParams rnn;
+  miopenRNNBiasMode_t bias_mode = (has_biases) ? miopenRNNwithBias : miopenRNNNoBias;
+  rnn.set(mode, hidden_size, num_layers, bidirectional, datatype, bias_mode);
+  RNNDescriptor rnn_desc = rnn.descriptor();
+
+  TensorGeometry x_geom ({1, input.size(-1)});
+  TensorDescriptor x_desc;
+  x_desc.set(datatype, x_geom.sizes(), x_geom.strides(), 5);
+
+  auto num_params = get_num_weights(handle, rnn_desc, x_desc, datatype);
+
+  // Try to get parameter storage
+  auto & any_param = parameters.at(0);
+  auto param_storage = any_param.storage();
+  auto weight_buf = at::empty({0}, any_param.options()).set_(param_storage);
+  if (weight_buf.size(0) < num_params) {
+    return {};
+  } else if (weight_buf.size(0) > num_params) {
+    weight_buf = weight_buf.narrow(0, 0, num_params);
+  }
+
+  // Get and check data pointers
+  //TODO: implement get_expected_data_ptrs.
+  auto expected_data_ptrs = get_expected_data_ptrs(
+      weight_buf, handle, rnn, rnn_desc, x_desc, datatype);
+
+  int64_t num_parameters = parameters.size();
+  int64_t num_ptrs = expected_data_ptrs.size();
+  AT_ASSERT(num_ptrs == (num_parameters * (has_biases ? 1 : 2)));
+  AT_ASSERT(num_ptrs % (has_biases ? 4 : 2) == 0);
+  for (int64_t param_i = 0, ptr_i = 0;
+       ptr_i < num_ptrs;
+       ptr_i += (has_biases ? 2 : 4), param_i += 2) {
+    if (expected_data_ptrs[ptr_i] != parameters[param_i].data_ptr()) return {};
+    if (expected_data_ptrs[ptr_i + 1] != parameters[param_i + 1].data_ptr()) return {};
+  }
+  if (!parameters[num_parameters - 1].is_contiguous()) return {};
+  return weight_buf;
+}
+
+const char * WEIGHT_FORMAT_WARN = "RNN module weights are not part of single contiguous "
+                                  "chunk of memory. This means they need to be compacted "
+                                  "at every call, possibly greatly increasing memory usage. "
+                                  "To compact weights again call flatten_parameters().";
+
 template<typename hidden_type>
 std::pair<Tensor, hidden_type> _miopen_impl(
-	const Tensor& input, const Tensor& _batch_sizes, const hidden_type& hidden,
-	TensorList params, bool has_biases, miopenRNNMode_t mode,
-	int64_t num_layers, double dropout_p, bool train, bool bidirectional) {
-	AT_ERROR("_miopen_impl : Didn't implement it yet.");
+      const Tensor& input, const Tensor& _batch_sizes, const hidden_type& hidden,
+      TensorList params, bool has_biases, miopenRNNMode_t mode,
+      int64_t num_layers, double dropout_p, bool train, bool bidirectional) {
+  Tensor hx, cx;
+  std::tie(hx, cx) = unpack_hidden(hidden);
+  int64_t hidden_size = hx.size(2);
+
+  auto weight_buf = try_get_weight_buf(
+      input, params, has_biases, mode, hidden_size, num_layers, bidirectional);
+  if (!weight_buf.defined()) {
+    AT_WARN(WEIGHT_FORMAT_WARN);
+  }
+
+  AT_CHECK(_batch_sizes.dim() == 1, "batch_sizes tensor should be 1D");
+  IntArrayRef batch_sizes { _batch_sizes.data<int64_t>(), static_cast<size_t>(_batch_sizes.size(0)) };
+
+  Tensor dropout_state = at::empty({0}, input.options());
+
+  auto miopen_output = at::miopen_rnn(
+      input, params, has_biases ? 4 : 2, weight_buf,
+      hx, cx, static_cast<int>(mode), hidden_size, num_layers, /*batch_first=*/false,
+      dropout_p, train, bidirectional, batch_sizes, dropout_state);
+
+  return {std::get<0>(miopen_output),
+          pack_hidden<hidden_type>(std::get<1>(miopen_output), std::get<2>(miopen_output))};
 }
 
 template<typename hidden_type>
 std::pair<Tensor, hidden_type> _miopen_impl(
-	const Tensor& input, const hidden_type& hidden,
-	TensorList params, bool has_biases, miopenRNNMode_t mode,
-	int64_t num_layers, double dropout_p, bool train, bool bidirectional, bool batch_first) {
-	AT_ERROR("_miopen_impl : Didn't implement it yet.");
+      const Tensor& input, const hidden_type& hidden,
+      TensorList params, bool has_biases, miopenRNNMode_t mode,
+      int64_t num_layers, double dropout_p, bool train, bool bidirectional, bool batch_first) {
+  Tensor hx, cx;
+  std::tie(hx, cx) = unpack_hidden(hidden);
+  int64_t hidden_size = hx.size(2);
+
+  auto weight_buf = try_get_weight_buf(
+      input, params, has_biases, mode, hidden_size, num_layers, bidirectional);
+  if (!weight_buf.defined()) {
+    AT_WARN(WEIGHT_FORMAT_WARN);
+  }
+
+  Tensor dropout_state = at::empty({0}, input.options());
+
+  auto miopen_output = at::miopen_rnn(
+      input, params, has_biases ? 4 : 2, weight_buf,
+      hx, cx, static_cast<int>(mode), hidden_size, num_layers, batch_first, dropout_p,
+      train, bidirectional, /*batch_sizes=*/{}, dropout_state);
+
+  return {std::get<0>(miopen_output),
+          pack_hidden<hidden_type>(std::get<1>(miopen_output), std::get<2>(miopen_output))};
 }
 
 #define ONE_HIDDEN_RNN(NAME, MODE)                                             \
@@ -876,24 +1048,22 @@ void lstm_miopen(Tensor& output, Tensor& hy, Tensor& cy,
       const Tensor& input, TensorList hx,
       TensorList params, bool has_biases,
       int64_t num_layers, double dropout_p, bool train, bool bidirectional, bool batch_first) {
-  AT_ERROR("lstm_miopen : Didn't implement it yet.");
-//  auto result = _miopen_impl(input, std::make_tuple(hx[0], hx[1]), params, has_biases,
-//      miopenLSTM, num_layers, dropout_p, train, bidirectional, batch_first);
-//  output = result.first;
-//  hy = std::get<0>(result.second);
-//  cy = std::get<1>(result.second);
+  auto result = _miopen_impl(input, std::make_tuple(hx[0], hx[1]), params, has_biases,
+      miopenLSTM, num_layers, dropout_p, train, bidirectional, batch_first);
+  output = result.first;
+  hy = std::get<0>(result.second);
+  cy = std::get<1>(result.second);
 }
 
 void lstm_packed_miopen(Tensor& output, Tensor& hy, Tensor& cy,
       const Tensor& data, const Tensor& batch_sizes, TensorList hx,
       TensorList params, bool has_biases,
       int64_t num_layers, double dropout_p, bool train, bool bidirectional) {
-  AT_ERROR("lstm_packed_miopen: didn't implement yet.");
-//  auto result = _miopen_impl(data, batch_sizes, std::make_tuple(hx[0], hx[1]),
-//      params, has_biases, miopenLSTM, num_layers, dropout_p, train, bidirectional);
-//  output = result.first;
-//  hy = std::get<0>(result.second);
-//  cy = std::get<1>(result.second);
+  auto result = _miopen_impl(data, batch_sizes, std::make_tuple(hx[0], hx[1]),
+      params, has_biases, miopenLSTM, num_layers, dropout_p, train, bidirectional);
+  output = result.first;
+  hy = std::get<0>(result.second);
+  cy = std::get<1>(result.second);
 }
 
 REGISTER_CUDA_DISPATCH(lstm_miopen_stub, &lstm_miopen);

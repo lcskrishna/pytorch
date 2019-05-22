@@ -296,72 +296,37 @@ int64_t _num_linear_layers(miopenRNNMode_t mode) {
 	}
 }
 
-  // This is a lightweight version of the method above used to quickly get the expected
-  // parameter offsets.
- std::vector<void*> get_expected_data_ptrs(
+// This is a lightweight version of the method above used to quickly get the expected
+// parameter offsets.
+std::vector<void*> get_expected_data_ptrs(
         const Tensor& weight_buf, miopenHandle_t handle, const RNNDescriptorParams& rnn,
         const RNNDescriptor& rnn_desc, const TensorDescriptor& x_desc, miopenDataType_t datatype) {
-    FilterDescriptor w_desc;
-    w_desc.set(weight_buf, 3);
-
     int64_t num_linear_layers = _num_linear_layers(rnn.rnn_mode);
     int64_t num_dir_layers = rnn.num_directions() * rnn.num_layers;
+    const auto miopen_methods = { miopenGetRNNLayerParamOffset, miopenGetRNNLayerBiasOffset };
     std::vector<void*> data_ptrs;
     data_ptrs.reserve(num_dir_layers * 2 * 2);
+    auto element_size = dataSize(datatype);
     for (int64_t layer = 0; layer < num_dir_layers; layer++) {
-    
-        const std::array<int64_t, 2> linear_offsets = { 0, num_linear_layers / 2 };
-        for (int64_t linear_id : linear_offsets) {
-          FilterDescriptor lin_layer_mat_desc;
-          void* matrix_pointer;
-          size_t param_size;
-          MIOPEN_CHECK(miopenGetRNNLayerParamSize(handle, rnn_desc.desc(), layer, x_desc.desc(), linear_id, &param_size));
-          matrix_pointer = THCudaMalloc(globalContext().lazyInitCUDA(), param_size);
-          MIOPEN_CHECK(miopenGetRNNLayerParam(
-                handle,
-                rnn_desc.desc(),
-                layer,
-                x_desc.desc(),
-                w_desc.desc(),
-                weight_buf.data_ptr(),
-                linear_id,
-                lin_layer_mat_desc.mut_desc(),
-                matrix_pointer
-                ));
-          data_ptrs.push_back(matrix_pointer);
-          if (matrix_pointer) {
-          	THCudaFree(globalContext().lazyInitCUDA(), matrix_pointer);
-          }
+        for (auto miopen_method : miopen_methods) {
+            const std::array<int64_t, 2> linear_offsets = { 0, num_linear_layers / 2 };
+            for (int64_t linear_id : linear_offsets) {
+                FilterDescriptor lin_layer_mat_desc;
+                void* matrix_pointer;
+                size_t param_offset;
+                MIOPEN_CHECK(miopen_method(
+                    rnn_desc.desc(),
+                    layer,
+                    x_desc.desc(),
+                    linear_id,
+                    lin_layer_mat_desc.mut_desc(),
+                    &param_offset
+                    ));
+                matrix_pointer = (char*)weight_buf.data_ptr() + (param_offset * element_size);
+                data_ptrs.push_back(matrix_pointer);
+           }
         }
     }
-
-    for (int64_t layer = 0; layer < num_dir_layers; layer++) {
-
-        const std::array<int64_t, 2> linear_offsets = { 0, num_linear_layers / 2 };
-        for (int64_t linear_id : linear_offsets) {
-          FilterDescriptor lin_layer_mat_desc;
-          void* matrix_pointer;
-          size_t param_size;
-          MIOPEN_CHECK(miopenGetRNNLayerBiasSize(handle, rnn_desc.desc(), layer, linear_id, &param_size));
-          matrix_pointer = THCudaMalloc(globalContext().lazyInitCUDA(), param_size);
-          MIOPEN_CHECK(miopenGetRNNLayerBias(
-                handle,
-                rnn_desc.desc(),
-                layer,
-                x_desc.desc(),
-                w_desc.desc(),
-                weight_buf.data_ptr(),
-                linear_id,
-                lin_layer_mat_desc.mut_desc(),
-                matrix_pointer
-                ));
-          data_ptrs.push_back(matrix_pointer);
-          if (matrix_pointer) {
-          	THCudaFree(globalContext().lazyInitCUDA(), matrix_pointer);	
-          }
-        }
-    }
-
     return data_ptrs;
 }
 

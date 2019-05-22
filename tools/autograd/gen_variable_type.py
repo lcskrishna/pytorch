@@ -139,6 +139,11 @@ DONT_ENFORCE_SAME_TENSOR_IMPL_OR_STORAGE = {
     # These functions are expected to change impl or storage of input tensors
     'set_', '_cudnn_rnn_flatten_weight',
 }
+
+DONT_ENFORCE_SAME_TENSOR_IMPL_OR_STORAGE = {
+    # These functions are expected to change impl or storage of input tensors
+    '_th_set_', 'miopen_rnn_flatten_weight',
+}
 # END CHECKS FOR [ Invariant: TensorImpl and Storage Pointer Equality ]
 
 METHOD_DECLARATION = CodeTemplate("""\

@@ -442,7 +442,7 @@ std::vector<int64_t> _output_size(const RNNDescriptorParams& rnn, const TensorDe
 
 Tensor miopen_rnn_flatten_weight(
         TensorList weight_arr, int64_t weight_stride0, int64_t input_size,
-        miopenRNNMode_t fn_mode, int64_t fn_hidden_size, int64_t fn_num_layers,
+        int64_t fn_mode, int64_t fn_hidden_size, int64_t fn_num_layers,
         bool batch_first, bool fn_bidirectional
         ) {
     AT_ERROR("miopen_flatten_weight: not implemented yet.");

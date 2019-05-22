@@ -445,7 +445,7 @@ Tensor miopen_rnn_flatten_weight(
         int64_t fn_mode, int64_t fn_hidden_size, int64_t fn_num_layers,
         bool batch_first, bool fn_bidirectional
         ) {
-    AT_ERROR("miopen_flatten_weight: not implemented yet.");
+    //AT_ERROR("miopen_flatten_weight: not implemented yet.");
 
     AT_CHECK(weight_arr.size() > 0, "miopen_rnn_flatten_weight : cannot flatten empty weight list.");
 

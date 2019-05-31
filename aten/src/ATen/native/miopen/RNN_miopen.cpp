@@ -301,7 +301,11 @@ std::vector<void*> get_expected_data_ptrs(
         const RNNDescriptor& rnn_desc, const TensorDescriptor& x_desc, miopenDataType_t datatype) {
     int64_t num_linear_layers = _num_linear_layers(rnn.rnn_mode);
     int64_t num_dir_layers = rnn.num_directions() * rnn.num_layers;
-    const auto miopen_methods = { miopenGetRNNLayerParamOffset, miopenGetRNNLayerBiasOffset };
+    auto bias_mode = rnn.bias_mode;
+    auto miopen_methods = { miopenGetRNNLayerParamOffset, miopenGetRNNLayerBiasOffset };
+    if (bias_mode == miopenRNNNoBias) {
+    	miopen_methods = {miopenGetRNNLayerParamOffset};
+    }
     std::vector<void*> data_ptrs;
     data_ptrs.reserve(num_dir_layers * 2 * 2);
     auto element_size = dataSize(datatype);
@@ -338,6 +342,7 @@ std::pair<std::vector<Tensor>, size_t> get_parameters(miopenHandle_t handle, con
 	size_t cur_offset = 0;
 	size_t global_layer_params_count = 0;
 	auto elem_size = dataSize(getMiopenDataType(weight_buf));
+	auto bias_mode = rnn.bias_mode;
 
 	for (int64_t layer = 0; layer < num_layers; layer++) {
 		size_t layer_params_count = 0;
@@ -376,35 +381,37 @@ std::pair<std::vector<Tensor>, size_t> get_parameters(miopenHandle_t handle, con
 		}
 
 		// Get bias params
-		for (int64_t linear_id = 0; linear_id < num_linear_layers; linear_id++) {
-			FilterDescriptor lin_layer_mat_desc;
-			size_t offset;
-			MIOPEN_CHECK(miopenGetRNNLayerBiasOffset(
-				rnn_desc.desc(),
-				layer,
-				x_desc.desc(),
-				linear_id,
-				lin_layer_mat_desc.mut_desc(),
-				&offset));
+		if (bias_mode == miopenRNNwithBias) {
+			for (int64_t linear_id = 0; linear_id < num_linear_layers; linear_id++) {
+				FilterDescriptor lin_layer_mat_desc;
+				size_t offset;
+				MIOPEN_CHECK(miopenGetRNNLayerBiasOffset(
+					rnn_desc.desc(),
+					layer,
+					x_desc.desc(),
+					linear_id,
+					lin_layer_mat_desc.mut_desc(),
+					&offset));
 
-			size_t bias_size;
-			MIOPEN_CHECK(miopenGetRNNLayerBiasSize(
-				handle,
-				rnn_desc.desc(),
-				layer,
-				linear_id,
-				&bias_size));
-			bias_size /= elem_size;
+				size_t bias_size;
+				MIOPEN_CHECK(miopenGetRNNLayerBiasSize(
+					handle,
+					rnn_desc.desc(),
+					layer,
+					linear_id,
+					&bias_size));
+				bias_size /= elem_size;
 
-			if(linear_id == 0 || linear_id == num_linear_layers / 2) {
-				std::initializer_list<int64_t> size = { bias_size * num_linear_layers / 2, 1};
-				Tensor param = at::empty({0}, weight_buf.options()).set_(weight_buf.storage(), offset, size);
-				params.emplace_back(std::move(param));
-				layer_params_count++;
-			} else {
-				AT_ASSERTM(cur_offset == offset, "cur_offset = ", cur_offset, " ; offset = ", offset);
+				if(linear_id == 0 || linear_id == num_linear_layers / 2) {
+					std::initializer_list<int64_t> size = { bias_size * num_linear_layers / 2, 1};
+					Tensor param = at::empty({0}, weight_buf.options()).set_(weight_buf.storage(), offset, size);
+					params.emplace_back(std::move(param));
+					layer_params_count++;
+				} else {
+					AT_ASSERTM(cur_offset == offset, "cur_offset = ", cur_offset, " ; offset = ", offset);
+				}
+				cur_offset = offset + bias_size;
 			}
-			cur_offset = offset + bias_size;
 		}
 
 		if (layer == 0) {

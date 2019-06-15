@@ -88,8 +88,7 @@ struct RNNDescriptorParams {
         this->algo = algo;
     }
 
-    /*fn_mode is set in torch.backends.cudnn (get_cudnn_mode() method) 
-      Need to modify the interface to the frontend to make this function useful.
+    /*fn_mode is set in torch.backends.miopen (get_miopen_rnn_mode() method) 
      */
     void set_mode(int64_t fn_mode) {
         switch (fn_mode) {
@@ -450,7 +449,6 @@ Tensor miopen_rnn_flatten_weight(
         int64_t fn_mode, int64_t fn_hidden_size, int64_t fn_num_layers,
         bool batch_first, bool fn_bidirectional
         ) {
-    //AT_ERROR("miopen_flatten_weight: not implemented yet.");
 
     AT_CHECK(weight_arr.size() > 0, "miopen_rnn_flatten_weight : cannot flatten empty weight list.");
 
@@ -506,7 +504,6 @@ std::tuple<Tensor, Tensor, Tensor, Tensor, Tensor> miopen_rnn(
         bool batch_first, double fn_dropout, bool fn_train, bool fn_bidirectional,
         IntArrayRef fn_batch_sizes, const Tensor& fn_dropout_state
         ) {
-    //AT_ERROR("miopen_rnn : not implemented yet.");
 
     check_device(input_r, weight, {hx, cx});
     auto input = input_r;
@@ -550,7 +547,6 @@ std::tuple<Tensor, Tensor, Tensor, Tensor, Tensor> miopen_rnn(
 
     RNNDescriptors descs(fn, handle, x, y, hx, cx);
 
-    //TODO: Need to implement get_parameters that gets params and params_stride0. [Done.]
     FilterDescriptor w_desc;
     if (!weight_buf.defined()) {
     	auto num_weights = get_num_weights(handle, descs.rnn_desc, descs.x_descs[0], datatype);
@@ -893,7 +889,6 @@ Tensor try_get_weight_buf(
   }
 
   // Get and check data pointers
-  //TODO: implement get_expected_data_ptrs.
   auto expected_data_ptrs = get_expected_data_ptrs(
       weight_buf, handle, rnn, rnn_desc, x_desc, datatype);
 

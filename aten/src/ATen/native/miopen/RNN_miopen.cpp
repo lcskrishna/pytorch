@@ -829,6 +829,21 @@ std::tuple<Tensor, Tensor, Tensor, std::vector<Tensor>> miopen_rnn_backward(
     std::vector<Tensor> dw;
     if (output_mask[3]) {
 		dw = at::native::miopen_rnn_backward_weight(input, weight, weight_stride0, weight_buf, hx, cx, output, mode, hidden_size, num_layers, batch_first, dropout, train, bidirectional, batch_sizes, dropout_state, reserve, ws);
+        if (mode == 2) {
+            for (int i=0; i < dw.size(); i++) {
+                auto weight_val = dw[i];
+                auto lstm_sliced = weight_val.chunk(4, 0);
+                dw[i] = at::cat({lstm_sliced[0], lstm_sliced[1], lstm_sliced[3], lstm_sliced[2]});
+            }
+        }
+    
+        if (mode == 3) {
+            for (int i=0; i < dw.size(); i++) {
+                auto weight_val = dw[i];
+                auto gru_sliced = weight_val.chunk(3,0);
+                dw[i] = at::cat({gru_sliced[1], gru_sliced[0], gru_sliced[2]});
+            }
+        }
     }
     return std::tuple<Tensor, Tensor, Tensor, std::vector<Tensor>>{dx, dhx, dcx, dw};
 }

@@ -41,15 +41,3 @@ def is_rnn_acceptable(tensor):
 	if not is_available():
 		return False
 	return True
-
-def permute_rnn_weights(mode, wei_tensor):
-	if mode == 'LSTM':
-		split_param = torch.chunk(wei_tensor, 4, 0)
-		permuted_param = torch.cat((split_param[0], split_param[1], split_param[3], split_param[2]), 0)
-		return permuted_param
-	elif mode == 'GRU':
-		split_param = torch.chunk(wei_tensor, 3, 0)
-		permuted_param = torch.cat((split_param[1], split_param[0], split_param[2]), 0)
-		return permuted_param
-	else:
-		return wei_tensor

@@ -889,6 +889,8 @@ std::tuple<Tensor, Tensor> pack_hidden<std::tuple<Tensor, Tensor>>(const Tensor&
 Tensor try_get_weight_buf(
       const Tensor& input, TensorList parameters, bool has_biases,
       miopenRNNMode_t mode, int64_t hidden_size, int64_t num_layers, bool bidirectional) {
+  // For LSTM and GRU, we need to permute weights before creating the weight_buf
+  if (mode == miopenLSTM || mode == miopenGRU)	return{};
   // Prepare all relevant descriptors
   auto handle = getMiopenHandle();
   auto datatype = getMiopenDataType(input);

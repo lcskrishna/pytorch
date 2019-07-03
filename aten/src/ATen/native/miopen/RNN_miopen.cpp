@@ -572,6 +572,13 @@ std::tuple<Tensor, Tensor, Tensor, Tensor, Tensor> miopen_rnn(
     	std::tie(params, params_stride0) = get_parameters(handle, fn.rnn, descs.rnn_desc, descs.x_descs[0], w_desc, weight_buf);
     	_copyParams(MatrixRef<Tensor>{weight, static_cast<size_t>(weight_stride0)},
     				MatrixRef<Tensor>{params, params_stride0});
+		if(fn_mode > 1) {
+			for(auto param : params) {
+				Tensor tmp = param;
+				auto permuted_param = permute_wei_for_miopen(tmp, fn_mode);
+				param.copy_(permuted_param.view_as(param));
+			}
+		}
     } else {
     	w_desc.set(weight_buf, 3);
     }

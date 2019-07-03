@@ -950,7 +950,7 @@ std::pair<Tensor, hidden_type> _miopen_impl(
 
   auto weight_buf = try_get_weight_buf(
       input, params, has_biases, mode, hidden_size, num_layers, bidirectional);
-  if (!weight_buf.defined()) {
+  if (!weight_buf.defined() && (mode == miopenRNNTANH || mode == miopenRNNRELU)) {
     AT_WARN(WEIGHT_FORMAT_WARN);
   }
 
@@ -979,7 +979,7 @@ std::pair<Tensor, hidden_type> _miopen_impl(
 
   auto weight_buf = try_get_weight_buf(
       input, params, has_biases, mode, hidden_size, num_layers, bidirectional);
-  if (!weight_buf.defined()) {
+  if (!weight_buf.defined() && (mode == miopenRNNTANH || mode == miopenRNNRELU)) {
     AT_WARN(WEIGHT_FORMAT_WARN);
   }
 

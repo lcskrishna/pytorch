@@ -274,6 +274,22 @@ void _viewOrCopyParams(MatrixRef<Tensor> params_from, MatrixRef<Tensor> params_t
     }
 }
 
+void _copyParams_and_permute(MatrixRef<Tensor> params_from, MatrixRef<Tensor> params_to, int64_t mode) {
+    AT_ASSERTM(params_from.size(0) == params_to.size(0), "number of layers mismatch");
+    for (size_t i = 0; i < params_from.size(0); i++) {
+        auto layer_params_from = params_from[i];
+        auto layer_params_to = params_to[i];
+        for (auto a = layer_params_from.begin(), b = layer_params_to.begin();
+                a != layer_params_from.end() && b != layer_params_to.end();
+                ++a, ++b) {
+            auto param_from = *a, param_to = *b;
+            AT_ASSERTM(param_from.type() == param_to.type(), "parameter types mismatch");
+            auto tmp = permute_wei_for_miopen(param_from, mode);
+            param_to.copy_(tmp.view_as(param_to));
+        }
+    }
+}
+
 void _copyParams(MatrixRef<Tensor> params_from, MatrixRef<Tensor> params_to) {
     _viewOrCopyParams(params_from, params_to, true);
 }
@@ -570,15 +586,12 @@ std::tuple<Tensor, Tensor, Tensor, Tensor, Tensor> miopen_rnn(
     	std::vector<Tensor> params;
     	size_t params_stride0;
     	std::tie(params, params_stride0) = get_parameters(handle, fn.rnn, descs.rnn_desc, descs.x_descs[0], w_desc, weight_buf);
-    	_copyParams(MatrixRef<Tensor>{weight, static_cast<size_t>(weight_stride0)},
-    				MatrixRef<Tensor>{params, params_stride0});
-		if(fn_mode > 1) {
-			for(auto param : params) {
-				Tensor tmp = param;
-				auto permuted_param = permute_wei_for_miopen(tmp, fn_mode);
-				param.copy_(permuted_param.view_as(param));
-			}
-		}
+	if (fn_mode < 2)
+		_copyParams(MatrixRef<Tensor>{weight, static_cast<size_t>(weight_stride0)},
+			    MatrixRef<Tensor>{params, params_stride0});
+	else
+		_copyParams_and_permute(MatrixRef<Tensor>{weight, static_cast<size_t>(weight_stride0)},
+					MatrixRef<Tensor>{params, params_stride0}, fn_mode);
     } else {
     	w_desc.set(weight_buf, 3);
     }

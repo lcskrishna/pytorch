@@ -122,12 +122,6 @@ class RNNBase(Module):
                         all_weights, (4 if self.bias else 2),
                         self.input_size, rnn.get_cudnn_mode(self.mode), self.hidden_size, self.num_layers,
                         self.batch_first, bool(self.bidirectional))
-            elif mio.is_rnn_acceptable(any_param):
-                with torch.no_grad():
-                    torch.miopen_rnn_flatten_weight(
-                        all_weights, (4 if self.bias else 2),
-                        self.input_size, mio.get_miopen_rnn_mode(self.mode), self.hidden_size, self.num_layers,
-                        self.batch_first, bool(self.bidirectional))
 
     def _apply(self, fn):
         ret = super(RNNBase, self)._apply(fn)

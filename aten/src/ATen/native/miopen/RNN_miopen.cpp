@@ -966,9 +966,6 @@ std::pair<Tensor, hidden_type> _miopen_impl(
 
   auto weight_buf = try_get_weight_buf(
       input, params, has_biases, mode, hidden_size, num_layers, bidirectional);
-  if (!weight_buf.defined() && (mode == miopenRNNTANH || mode == miopenRNNRELU)) {
-    AT_WARN(WEIGHT_FORMAT_WARN);
-  }
 
   AT_CHECK(_batch_sizes.dim() == 1, "batch_sizes tensor should be 1D");
   IntArrayRef batch_sizes { _batch_sizes.data<int64_t>(), static_cast<size_t>(_batch_sizes.size(0)) };
@@ -995,9 +992,6 @@ std::pair<Tensor, hidden_type> _miopen_impl(
 
   auto weight_buf = try_get_weight_buf(
       input, params, has_biases, mode, hidden_size, num_layers, bidirectional);
-  if (!weight_buf.defined() && (mode == miopenRNNTANH || mode == miopenRNNRELU)) {
-    AT_WARN(WEIGHT_FORMAT_WARN);
-  }
 
   Tensor dropout_state = at::empty({0}, input.options());
 

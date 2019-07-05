@@ -240,6 +240,9 @@ struct RNNDescriptors {
 
 Tensor permute_wei_for_miopen(Tensor wei, int64_t mode)
 {
+	if (mode < 2)
+		return wei;
+
 	Tensor permuted_wei;
 	if(mode == 2) {	// LSTM
 		auto sliced_tensor = wei.chunk(4, 0);

@@ -97,8 +97,7 @@ class RNNBase(Module):
         Otherwise, it's a no-op.
         """
         any_param = next(self.parameters()).data
-        import torch.backends.miopen as mio
-        if not any_param.is_cuda or not (torch.backends.cudnn.is_acceptable(any_param) or mio.is_rnn_acceptable(any_param)):
+        if not any_param.is_cuda or not torch.backends.cudnn.is_acceptable(any_param):
             return
 
         # If any parameters alias, we fall back to the slower, copying code path. This is
@@ -111,17 +110,17 @@ class RNNBase(Module):
             return
 
         with torch.cuda.device_of(any_param):
-            if torch.backends.cudnn.is_acceptable(any_param):
-                import torch.backends.cudnn.rnn as rnn
-                # NB: This is a temporary hack while we still don't have Tensor
-                # bindings for ATen functions
-                with torch.no_grad():
+            import torch.backends.cudnn.rnn as rnn
+
+            # NB: This is a temporary hack while we still don't have Tensor
+            # bindings for ATen functions
+            with torch.no_grad():
                 # NB: this is an INPLACE function on all_weights, that's why the
                 # no_grad() is necessary.
-                    torch._cudnn_rnn_flatten_weight(
-                        all_weights, (4 if self.bias else 2),
-                        self.input_size, rnn.get_cudnn_mode(self.mode), self.hidden_size, self.num_layers,
-                        self.batch_first, bool(self.bidirectional))
+                torch._cudnn_rnn_flatten_weight(
+                    all_weights, (4 if self.bias else 2),
+                    self.input_size, rnn.get_cudnn_mode(self.mode), self.hidden_size, self.num_layers,
+                    self.batch_first, bool(self.bidirectional))
 
     def _apply(self, fn):
         ret = super(RNNBase, self)._apply(fn)

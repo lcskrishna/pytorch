@@ -4,12 +4,12 @@
 
 #include "ATen/cuda/CUDAContext.h"
 
-#ifdef __HIP_PLATFORM_HCC__
-  constexpr int INDEX_BLOCK_SIZE = 256;
-  constexpr int INDEX_GRID_DIM = 16;
+#if defined(__HIP_PLATFORM_HCC__)
+  #define INDEX_BLOCK_SIZE  256
+  #define INDEX_GRID_DIM 16
 #else
-  constexpr int INDEX_BLOCK_SIZE = 128;
-  constexpr int INDEX_GRID_DIM = 8;
+  #define INDEX_BLOCK_SIZE  128
+  #define INDEX_GRID_DIM  8
 #endif
 
 // Check tensor dimensions for index operations, and return the slice size.

@@ -5,11 +5,11 @@
 #include "ATen/cuda/CUDAContext.h"
 
 #ifdef __HIP_PLATFORM_HCC__
-  constexpr int BLOCK_SIZE = 256;
-  constexpr int GRID_DIM = 16;
+  constexpr int INDEX_BLOCK_SIZE = 256;
+  constexpr int INDEX_GRID_DIM = 16;
 #else
-  constexpr int BLOCK_SIZE = 128;
-  constexpr int GRID_DIM = 8;
+  constexpr int INDEX_BLOCK_SIZE = 128;
+  constexpr int INDEX_GRID_DIM = 8;
 #endif
 
 // Check tensor dimensions for index operations, and return the slice size.
@@ -459,11 +459,11 @@ void THCTensor_(indexSelect)(THCState *state, THCTensor *dst, THCTensor *src, in
       static_cast<TYPE>((IDX_IS_MAJOR) ? sliceSize : numIndices),  \
       srcSelectDimSize);
 
-  dim3 smallIndexGrid(std::min(THCCeilDiv(sliceSize, (ptrdiff_t)BLOCK_SIZE), (ptrdiff_t)(mpc * GRID_DIM)));
-  dim3 smallIndexBlock(std::min(sliceSize, (ptrdiff_t)BLOCK_SIZE));
+  dim3 smallIndexGrid(std::min(THCCeilDiv(sliceSize, (ptrdiff_t)INDEX_BLOCK_SIZE), (ptrdiff_t)(mpc * INDEX_GRID_DIM)));
+  dim3 smallIndexBlock(std::min(sliceSize, (ptrdiff_t)INDEX_BLOCK_SIZE));
 
-  dim3 largeIndexGrid(std::min(THCCeilDiv(dstTotalSize, (ptrdiff_t)BLOCK_SIZE), (ptrdiff_t)(mpc * GRID_DIM)));
-  dim3 largeIndexBlock(std::min(dstTotalSize, (ptrdiff_t)BLOCK_SIZE));
+  dim3 largeIndexGrid(std::min(THCCeilDiv(dstTotalSize, (ptrdiff_t)INDEX_BLOCK_SIZE), (ptrdiff_t)(mpc * INDEX_GRID_DIM)));
+  dim3 largeIndexBlock(std::min(dstTotalSize, (ptrdiff_t)INDEX_BLOCK_SIZE));
 
   if (THCTensor_canUse32BitIndexMath(state, dst) &&
       THCTensor_canUse32BitIndexMath(state, src) &&

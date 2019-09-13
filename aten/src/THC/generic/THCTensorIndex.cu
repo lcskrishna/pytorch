@@ -450,12 +450,19 @@ void THCTensor_(indexSelect)(THCState *state, THCTensor *dst, THCTensor *src, in
       dstSelectDim, srcSelectDim, static_cast<TYPE>(dstTotalSize), \
       static_cast<TYPE>((IDX_IS_MAJOR) ? sliceSize : numIndices),  \
       srcSelectDimSize);
+#ifdef __HIP_PLATFORM_HCC__
+  dim3 smallIndexGrid(std::min(THCCeilDiv(sliceSize, (ptrdiff_t)256), (ptrdiff_t)(mpc * 16)));
+  dim3 smallIndexBlock(std::min(sliceSize, (ptrdiff_t)256));
 
+  dim3 largeIndexGrid(std::min(THCCeilDiv(dstTotalSize, (ptrdiff_t)256), (ptrdiff_t)(mpc * 16)));
+  dim3 largeIndexBlock(std::min(dstTotalSize, (ptrdiff_t)256));
+#else
   dim3 smallIndexGrid(std::min(THCCeilDiv(sliceSize, (ptrdiff_t)128), (ptrdiff_t)(mpc * 8)));
   dim3 smallIndexBlock(std::min(sliceSize, (ptrdiff_t)128));
 
   dim3 largeIndexGrid(std::min(THCCeilDiv(dstTotalSize, (ptrdiff_t)128), (ptrdiff_t)(mpc * 8)));
   dim3 largeIndexBlock(std::min(dstTotalSize, (ptrdiff_t)128));
+#endif
 
   if (THCTensor_canUse32BitIndexMath(state, dst) &&
       THCTensor_canUse32BitIndexMath(state, src) &&

@@ -1871,6 +1871,14 @@
   dispatch:
     CUDA: miopen_rnn_backward
 
+- func: miopen_max_pooling(Tensor self, int[] kernel_size, int[] stride, int[] padding, int[] dilation, bool ceil_mode) -> (Tensor, Tensor)
+  dispatch:
+    CUDA: miopen_max_pooling
+
+- func: miopen_max_pooling_backward(Tensor grad_output, Tensor self, int[] kernel_size, int[] stride, int[] padding, int[] dilation, bool ceil_mode, Tensor indices) -> Tensor
+  dispatch:
+     CUDA: miopen_max_pooling_backward
+
 - func: mm(Tensor self, Tensor mat2) -> Tensor
   use_c10_dispatcher: full
   variants: function, method

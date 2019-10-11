@@ -1,6 +1,7 @@
 #include <ATen/ATen.h>
 #include <ATen/AccumulateType.h>
 #include <ATen/native/Pool.h>
+#include <ATen/NativeFunctions.h>
 #include <ATen/cuda/CUDAContext.h>
 #include <ATen/cuda/CUDAApplyUtils.cuh>
 #include <ATen/cuda/detail/TensorInfo.cuh>
@@ -362,8 +363,15 @@ std::tuple<Tensor, Tensor> max_pool2d_with_indices_cuda(
   IntArrayRef dilation,
   bool ceil_mode)
 {
+
+  if (input.scalar_type() == at::kFloat && detail::getCUDAHooks().compiledWithMIOpen() && input.is_cuda() && !(dilation[0] > 1 || dilation[1] > 1)) {
+    //std::cout << "DilatedMaxPool2d.cu : Entered MIOpen call." << std::endl;
+    return at::miopen_max_pooling(input.contiguous(), kernel_size, stride, padding, dilation, ceil_mode);
+  }
+
   Tensor output = at::empty({0}, input.options());
   Tensor indices = at::empty({0}, input.options().dtype(kLong));
+
   max_pool2d_with_indices_out_cuda_template(
     output,
     indices,
@@ -411,6 +419,11 @@ Tensor max_pool2d_with_indices_backward_cuda(
   const Tensor& indices)
 {
   auto gradInput = at::zeros_like(input);
+  if (input.is_cuda() && detail::getCUDAHooks().compiledWithMIOpen() && ((input.scalar_type() == at::kFloat))
+	&& (!(dilation[0] > 1 || dilation[1] > 1))) {
+       //std::cout << "DilatedMaxPool2d.cu : Entered Max pooling backward with MIOpen." << std::endl;
+       return at::miopen_max_pooling_backward(gradOutput_.contiguous(), input.contiguous(), kernel_size, stride, padding, dilation, ceil_mode, indices.contiguous());	
+  }
   max_pool2d_with_indices_backward_out_cuda_template(
     gradInput,
     gradOutput_,

@@ -1034,6 +1034,8 @@ bool aten_op_is_not_moved_to_c10_yet(const c10::OperatorName& opName) {
         {"aten::miopen_depthwise_convolution", ""},
         {"aten::miopen_rnn", ""},
         {"aten::miopen_rnn_backward", ""},
+        {"aten::miopen_max_pooling", ""},
+        {"aten::miopen_max_pooling_backward", ""},
         {"aten::mm", "out"},
         {"aten::mode", "values"},
     #ifdef BUILD_NAMEDTENSOR

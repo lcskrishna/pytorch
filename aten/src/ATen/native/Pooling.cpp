@@ -8,6 +8,14 @@
 
 namespace at { namespace native {
 
+// Check if pytorch is compiled with MIOpen.
+bool use_miopen(const at::Tensor& input) {
+    bool is_miopen_acceptable = (input.scalar_type() == at::kFloat) &&
+                                (detail::getCUDAHooks().compiledWithMIOpen()) &&
+                                (input.is_cuda());
+    return is_miopen_acceptable;
+}
+
 static void check1d(
     const char* function_name,
     const char* argument_name,
@@ -122,6 +130,11 @@ Tensor max_pool2d(
     return at::mkldnn_max_pool2d(
         self, kernel_size, stride, padding, dilation, ceil_mode);
   }
+
+  //if (use_miopen(self)) {
+  //  std::cout << "Pooling.cpp : Has capability to use MIOpen." << std::endl;
+  //}
+
   auto output_and_indices = at::max_pool2d_with_indices(
       self, kernel_size, stride, padding, dilation, ceil_mode);
   return std::get<0>(output_and_indices);

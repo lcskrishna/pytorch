@@ -106,9 +106,13 @@ static void prod_kernel_cuda(TensorIterator& iter) {
 static void mean_kernel_cuda(TensorIterator& iter) {
   if (iter.dtype() == kHalf) {
     return mean_kernel_impl<at::Half, float>(iter);
+  } else if (iter.dtype() == kBFloat16) {
+    return mean_kernel_impl<at::BFloat16, float>(iter);
   } else if (iter.dtype(1) == kHalf && iter.dtype() == kFloat) {
     // type promotion that does cast and reduction in a single kernel
     return mean_kernel_impl<at::Half, float, float>(iter);
+  } else if (iter.dtype(1) == kBFloat16 && iter.dtype() == kFloat) {
+    return mean_kernel_impl<at::BFloat16, float, float>(iter);
   }
   AT_DISPATCH_ALL_TYPES(iter.dtype(), "mean_cuda", [&]() {
     mean_kernel_impl<scalar_t>(iter);
@@ -141,41 +145,42 @@ void or_kernel_cuda(TensorIterator& iter) {
     }), false);
 }
 
-template <typename scalar_t, typename acc_t=scalar_t>
+template <typename scalar_t>
 void max_values_kernel_cuda_impl(TensorIterator& iter) {
   gpu_reduce_kernel<scalar_t, scalar_t>(
-    iter, func_wrapper<acc_t> ([]GPU_LAMBDA(acc_t a, acc_t b) -> acc_t {
-      return (THCNumerics<acc_t>::isnan(a) || a > b) ? a : b;
-    }), at::numeric_limits<acc_t>::lower_bound());
+    iter, func_wrapper<scalar_t> ([]GPU_LAMBDA(scalar_t a, scalar_t b) -> scalar_t {
+      return (THCNumerics<scalar_t>::isnan(a) || a > b) ? a : b;
+    }), at::numeric_limits<scalar_t>::lower_bound());
 }
 
-template <typename scalar_t, typename acc_t=scalar_t>
+template <typename scalar_t>
 void min_values_kernel_cuda_impl(TensorIterator& iter) {
   gpu_reduce_kernel<scalar_t, scalar_t>(
-    iter, func_wrapper<acc_t> ([]GPU_LAMBDA(acc_t a, acc_t b) -> acc_t {
-      return (THCNumerics<acc_t>::isnan(a) || a < b) ? a : b;
-    }), at::numeric_limits<acc_t>::upper_bound());
+    iter, func_wrapper<scalar_t> ([]GPU_LAMBDA(scalar_t a, scalar_t b) -> scalar_t {
+      return (THCNumerics<scalar_t>::isnan(a) || a < b) ? a : b;
+    }), at::numeric_limits<scalar_t>::upper_bound());
 }
 
 void max_values_kernel_cuda(TensorIterator& iter) {
-  if (iter.dtype(1) == kHalf) {
-    max_values_kernel_cuda_impl<at::Half, float>(iter);
-  } else {
-    AT_DISPATCH_ALL_TYPES(iter.dtype(), "max_values_cuda", [&]() {
-      max_values_kernel_cuda_impl<scalar_t>(iter);
-    });
-  }
+  AT_DISPATCH_ALL_TYPES(iter.dtype(), "max_values_cuda", [&]() {
+    max_values_kernel_cuda_impl<scalar_t>(iter);
+  });
 }
 
 void min_values_kernel_cuda(TensorIterator& iter) {
-  if (iter.dtype(1) == kHalf) {
-    min_values_kernel_cuda_impl<at::Half, float>(iter);
-  } else {
-    AT_DISPATCH_ALL_TYPES(iter.dtype(), "min_values_cuda", [&]() {
-      min_values_kernel_cuda_impl<scalar_t>(iter);
-    });
-  }
+  AT_DISPATCH_ALL_TYPES(iter.dtype(), "min_values_cuda", [&]() {
+    min_values_kernel_cuda_impl<scalar_t>(iter);
+  });
 }
+
+//void argmax_kernel_cuda(TensorIterator& iter) {
+//  AT_DISPATCH_ALL_TYPES(iter.dtype(1), "argmax_cuda", [&]() {
+//    gpu_reduce_kernel<scalar_t, int64_t>(
+//      iter,
+//      ArgMaxOps<scalar_t>{},
+//      thrust::pair<scalar_t, int64_t>(at::numeric_limits<scalar_t>::lower_bound(), 0));
+//  });
+//}
 
 template <typename scalar_t, typename acc_t=scalar_t>
 void argmax_kernel_cuda_impl(TensorIterator& iter) {
@@ -185,36 +190,25 @@ void argmax_kernel_cuda_impl(TensorIterator& iter) {
     thrust::pair<acc_t, int64_t>(at::numeric_limits<acc_t>::lower_bound(), 0));
 };
 
-template <typename scalar_t, typename acc_t=scalar_t>
-void argmin_kernel_cuda_impl(TensorIterator& iter) {
-  gpu_reduce_kernel<scalar_t, int64_t>(
-    iter,
-    ArgMinOps<acc_t>{},
-    thrust::pair<acc_t, int64_t>(at::numeric_limits<acc_t>::upper_bound(), 0));
-};
-
 void argmax_kernel_cuda(TensorIterator& iter) {
-  if (iter.dtype(1) == kHalf) {
-    // Instead of implementing is_nan and warp_shfl_down
-    // we can convert halves to float and do all the operations in float
-    argmax_kernel_cuda_impl<at::Half, float>(iter);
-  } else {
-    AT_DISPATCH_ALL_TYPES(iter.dtype(1), "argmax_cuda", [&]() {
-      argmax_kernel_cuda_impl<scalar_t>(iter);
-    });
-  }
+    if (iter.dtype(1) == kHalf) {
+        argmax_kernel_cuda_impl<at::Half, float>(iter);
+    } else if(iter.dtype(1) == kBFloat16) {
+        argmax_kernel_cuda_impl<at::BFloat16, float>(iter);
+    } else {
+        AT_DISPATCH_ALL_TYPES(iter.dtype(1), "argmax_cuda", [&]() {
+            argmax_kernel_cuda_impl<scalar_t>(iter);
+        });
+    }
 }
 
 void argmin_kernel_cuda(TensorIterator& iter) {
-  if (iter.dtype(1) == kHalf) {
-    // Instead of implementing is_nan and warp_shfl_down
-    // we can convert halves to float and do all the operations in float
-    argmin_kernel_cuda_impl<at::Half, float>(iter);
-  } else {
-    AT_DISPATCH_ALL_TYPES(iter.dtype(1), "argmin_cuda", [&]() {
-      argmin_kernel_cuda_impl<scalar_t>(iter);
-    });
-  }
+  AT_DISPATCH_ALL_TYPES(iter.dtype(1), "argmin_cuda", [&]() {
+    gpu_reduce_kernel<scalar_t, int64_t>(
+      iter,
+      ArgMinOps<scalar_t>{},
+      thrust::pair<scalar_t, int64_t>(at::numeric_limits<scalar_t>::upper_bound(), 0));
+  });
 }
 
 REGISTER_DISPATCH(std_var_stub, &std_var_kernel_cuda);

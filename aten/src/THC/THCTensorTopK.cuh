@@ -144,12 +144,33 @@ template <>
 struct TopKTypeConfig<at::BFloat16> {
   typedef uint32_t RadixType;
 
+  static inline __device__ unsigned short __bfloat16_as_ushort(at::BFloat16 v)
+  {
+    return static_cast<unsigned short>(v);
+  }
+
+  static inline __device__ at::BFloat16 __ushort_as_bfloat16(unsigned short x)
+  {
+    return static_cast<at::BFloat16>(x);
+  }
+
   static inline __device__ RadixType convert(at::BFloat16 v) {
+#if defined __HIP_PLATFORM_HCC__
+  RadixType x = __bfloat16_as_ushort(v);
+  RadixType mask = -((x >> 15)) | 0x8000;
+  return (x ^ mask);
+#else
     return 0u;
+#endif
   }
 
   static inline __device__ at::BFloat16 deconvert(RadixType v) {
+#if defined __HIP_PLATFORM_HCC__
+  RadixType mask = ((v >> 15) -1) | 0x8000;
+  return __ushort_as_bfloat16(v);
+#else
     return ScalarConvert<int, at::BFloat16>::to(0);
+#endif
   }
 };
 

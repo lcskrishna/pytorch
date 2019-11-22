@@ -13728,6 +13728,15 @@ _types = [
     torch.uint8
 ]
 
+if TEST_WITH_ROCM:
+    _types_with_bfloat16 = [
+        torch.half, torch.float, torch.bfloat16, torch.double,
+        torch.int8, torch.short, torch.int, torch.long,
+        torch.uint8
+    ]
+else:
+    _types_with_bfloat16 = _types
+
 _float_types = [torch.half, torch.float, torch.double]
 
 _float_types_no_half = [torch.float, torch.double]
@@ -13971,19 +13980,19 @@ tensor_op_tests = [
     ('kthvalue', 'neg_dim', _small_3d_unique, lambda t, d: [3, -1], 1e-5, 1e-5, 1e-5, _types, False),
     ('lerp', '', _small_3d, lambda t, d: [_small_3d(t, d), 0.3],
         1e-2, 1e-5, 1e-5, _float_types_no_half),
-    ('max', '', _small_3d, lambda t, d: [], 1e-5, 1e-5, 1e-5, _types, False),
-    ('max', 'dim', _small_3d_unique, lambda t, d: [1], 1e-5, 1e-5, 1e-5, _types, False),
-    ('max', 'neg_dim', _small_3d_unique, lambda t, d: [-1], 1e-5, 1e-5, 1e-5, _types, False),
+    ('max', '', _small_3d, lambda t, d: [], 1e-5, 1e-5, 1e-5, _types_with_bfloat16, False),
+    ('max', 'dim', _small_3d_unique, lambda t, d: [1], 1e-5, 1e-5, 1e-5, _types_with_bfloat16, False),
+    ('max', 'neg_dim', _small_3d_unique, lambda t, d: [-1], 1e-5, 1e-5, 1e-5, _types_with_bfloat16, False),
     ('max', 'elementwise', _medium_2d, lambda t, d: [_medium_2d(t, d)],
-        1e-5, 1e-5, 1e-5, _types, False),
-    ('min', '', _small_3d, lambda t, d: [], 1e-5, 1e-5, 1e-5, _types, False),
-    ('min', 'dim', _small_3d_unique, lambda t, d: [1], 1e-5, 1e-5, 1e-5, _types, False),
-    ('min', 'neg_dim', _small_3d_unique, lambda t, d: [-1], 1e-5, 1e-5, 1e-5, _types, False),
+        1e-5, 1e-5, 1e-5, _types_with_bfloat16, False),
+    ('min', '', _small_3d, lambda t, d: [], 1e-5, 1e-5, 1e-5, _types_with_bfloat16, False),
+    ('min', 'dim', _small_3d_unique, lambda t, d: [1], 1e-5, 1e-5, 1e-5, _types_with_bfloat16, False),
+    ('min', 'neg_dim', _small_3d_unique, lambda t, d: [-1], 1e-5, 1e-5, 1e-5, _types_with_bfloat16, False),
     ('min', 'elementwise', _medium_2d, lambda t, d: [_medium_2d(t, d)],
-        1e-5, 1e-5, 1e-5, _types, False),
-    ('mean', '', _small_3d, lambda t, d: [], 1e-3, 1e-5, 1e-5, _float_types, False),
-    ('mean', 'neg_dim', _small_3d, lambda t, d: [-1], 1e-3, 1e-5, 1e-5, _float_types, False),
-    ('mean', 'dim', _small_3d, lambda t, d: [1], 1e-3, 1e-5, 1e-5, _float_types, False),
+        1e-5, 1e-5, 1e-5, _types_with_bfloat16, False),
+    ('mean', '', _small_3d, lambda t, d: [], 1e-3, 1e-2, 1e-5, _float_types_with_bfloat16, False),
+    ('mean', 'neg_dim', _small_3d, lambda t, d: [-1], 1e-2, 1e-5, 1e-5, _float_types_with_bfloat16, False),
+    ('mean', 'dim', _small_3d, lambda t, d: [1], 1e-3, 1e-2, 1e-5, _float_types_with_bfloat16, False),
     # Double here because the CPU result will be wrong otherwise
     ('mean', '64bit_indexing', _giant_1d, lambda t, d: [],
         1e-3, 1e-5, 1e-5, [torch.double], False, [slowTest]),

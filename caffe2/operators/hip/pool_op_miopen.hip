@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) 2016-present, Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,8 +17,11 @@
 #include "caffe2/core/hip/context_gpu.h"
 #include "caffe2/core/hip/miopen_wrapper.h"
 #include "caffe2/operators/conv_pool_op_base.h"
+#include "caffe2/operators/pool_op.h"
 
 namespace caffe2 {
+
+template<class Functor>
 class MIOPENPoolOp : public ConvPoolOpBase<HIPContext> {
  public:
   MIOPENPoolOp(const OperatorDef& operator_def, Workspace* ws)
@@ -27,8 +30,8 @@ class MIOPENPoolOp : public ConvPoolOpBase<HIPContext> {
         poolWs_(nullptr),
         miopen_wrapper_(&context_),
         alpha_(OperatorBase::GetSingleArgument<float>("alpha", 1.0)),
-        beta_(OperatorBase::GetSingleArgument<float>("beta", 0.0))
-
+        beta_(OperatorBase::GetSingleArgument<float>("beta", 0.0)),
+        functor_(*this)
   {
     MIOPEN_ENFORCE(miopenCreateTensorDescriptor(&bottom_desc_));
     MIOPEN_ENFORCE(miopenCreateTensorDescriptor(&top_desc_));
@@ -114,10 +117,11 @@ class MIOPENPoolOp : public ConvPoolOpBase<HIPContext> {
   bool RunOnDevice() final {
     auto& X = Input(0);
     auto* Y = Output(0);
+   
     // TODO enable fp16
-    if (X.IsType<float>()) {
+    if (X.template IsType<float>()) {
       return DoRunWithType<float, float>();
-    } else if (X.IsType<at::Half>()){
+    } else if (X.template IsType<at::Half>()){
       return DoRunWithType<at::Half, float>();
     } else {
       LOG(FATAL) << "Unsupported input types";
@@ -135,8 +139,10 @@ class MIOPENPoolOp : public ConvPoolOpBase<HIPContext> {
   miopenPoolingMode_t mode_;
   const float alpha_;
   const float beta_;
+  const Functor functor_;
 };
 
+template <class Functor>
 class MIOPENPoolGradientOp : public ConvPoolOpBase<HIPContext> {
  public:
   MIOPENPoolGradientOp(const OperatorDef& operator_def, Workspace* ws)
@@ -146,7 +152,8 @@ class MIOPENPoolGradientOp : public ConvPoolOpBase<HIPContext> {
         miopen_wrapper_(&context_),
         alpha_(OperatorBase::GetSingleArgument<float>("alpha", 1.0)),
         beta_(OperatorBase::GetSingleArgument<float>("beta", 0.0)),
-        bwdPoolScratch_(nullptr) {
+        bwdPoolScratch_(nullptr),
+        functor_(*this) {
     MIOPEN_ENFORCE(miopenCreateTensorDescriptor(&bottom_desc_));
     MIOPEN_ENFORCE(miopenCreateTensorDescriptor(&top_desc_));
     MIOPEN_ENFORCE(miopenCreatePoolingDescriptor(&pooling_desc_));
@@ -289,9 +296,9 @@ class MIOPENPoolGradientOp : public ConvPoolOpBase<HIPContext> {
     auto* dX = Output(0);
     dX->ResizeLike(X);
 
-    if (X.IsType<float>()) {
+    if (X.template IsType<float>()) {
       return DoRunWithType<float, float>();
-    } else if (X.IsType<at::Half>()) {
+    } else if (X.template IsType<at::Half>()) {
       return DoRunWithType<at::Half, float>();
     } else {
       LOG(FATAL) << "Unsupported input types";
@@ -310,13 +317,101 @@ class MIOPENPoolGradientOp : public ConvPoolOpBase<HIPContext> {
   const float alpha_;
   const float beta_;
   float* bwdPoolScratch_;
+  const Functor functor_;
+};
+
+struct MIOpenMaxPoolFunctor {
+  explicit MIOpenMaxPoolFunctor(const OperatorBase& op)
+          : max_pool_functor(op) {}
+    
+  template <typename T, StorageOrder kOrder>
+  bool Forward(
+      const int N,
+      const int C,
+      const std::vector<int>& X_dims,
+      const std::vector<int>& Y_dims,
+      const std::vector<int>& kernel,
+      const std::vector<int>& dilation,
+      const std::vector<int>& stride, 
+      const std::vector<int>& pads,
+      const T* X, 
+      const T* Y,
+      HIPContext* context) const {
+      return max_pool_functor.Forward<T, kOrder>(
+          N, C, X_dims, Y_dims, kernel, dilation, stride, pads, X, Y, context);
+  }
+
+  template <typename T, StorageOrder kOrder>
+  bool Backward(
+      const int N,
+      const int C,
+      const std::vector<int>& X_dims,
+      const std::vector<int>& Y_dims,
+      const std::vector<int>& kernel,
+      const std::vector<int>& dilation,
+      const std::vector<int>& stride,
+      const std::vector<int>& pads,
+      const T* dY,
+      const T* X,
+      const T* Y,
+      T* dX,
+      HIPContext* context) const {
+      return max_pool_functor.Backward<T, kOrder>(
+          N, C, X_dims, Y_dims, kernel, dilation, stride, pads, dY, X, Y, dX, context);
+  } 
+
+  const MaxPoolFunctor<HIPContext> max_pool_functor;  
+           
+};
+
+struct MIOpenAvgPoolFunctor {
+  explicit MIOpenAvgPoolFunctor(const OperatorBase& op)
+            : avg_pool_functor(op) {}
+    
+  template <typename T, StorageOrder kOrder>
+  bool Forward(
+      const int N,
+      const int C,
+      const std::vector<int>& X_dims,
+      const std::vector<int>& Y_dims,
+      const std::vector<int>& kernel,
+      const std::vector<int>& dilation,
+      const std::vector<int>& stride,
+      const std::vector<int>& pads,
+      const T* X,
+      T* Y,
+      HIPContext* context) const {
+      return avg_pool_functor.Forward<T, kOrder>(
+          N, C, X_dims, Y_dims, kernel, dilation, stride, pads, X, Y, context);
+  }
+
+  template <typename T, StorageOrder kOrder>
+  bool Backward(
+      const int N,
+      const int C,
+      const std::vector<int>& X_dims,
+      const std::vector<int>& Y_dims,
+      const std::vector<int>& kernel,
+      const std::vector<int>& dilation,
+      const std::vector<int>& stride,
+      const std::vector<int>& pads,
+      const T* dY,
+      const T* X,
+      const T* Y,
+      T* dX,
+      HIPContext* context) const {
+      return avg_pool_functor.Backward<T, kOrder>(
+          N, C, X_dims, Y_dims, kernel, dilation, stride, pads, dY, X, Y, dX, context);
+  } 
+
+  const AveragePoolFunctor<HIPContext> avg_pool_functor;
 };
 
 namespace {
-REGISTER_MIOPEN_OPERATOR(AveragePool, MIOPENPoolOp);
-REGISTER_MIOPEN_OPERATOR(AveragePoolGradient, MIOPENPoolGradientOp);
+REGISTER_MIOPEN_OPERATOR(AveragePool, MIOPENPoolOp<MIOpenAvgPoolFunctor>);
+REGISTER_MIOPEN_OPERATOR(AveragePoolGradient, MIOPENPoolGradientOp<MIOpenAvgPoolFunctor>);
 
-REGISTER_MIOPEN_OPERATOR(MaxPool, MIOPENPoolOp);
-REGISTER_MIOPEN_OPERATOR(MaxPoolGradient, MIOPENPoolGradientOp);
+REGISTER_MIOPEN_OPERATOR(MaxPool, MIOPENPoolOp<MIOpenMaxPoolFunctor>);
+REGISTER_MIOPEN_OPERATOR(MaxPoolGradient, MIOPENPoolGradientOp<MIOpenMaxPoolFunctor>);
 } // namespace
 } // namespace caffe2

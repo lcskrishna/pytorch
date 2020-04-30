@@ -10,7 +10,7 @@
 #include <pybind11/pybind11.h>
 #include <torch/csrc/THP_export.h>
 #include <torch/csrc/utils/auto_gil.h>
-#include <torch/csrc/jit/script/jit_exception.h>
+#include <torch/csrc/jit/runtime/jit_exception.h>
 #include <torch/csrc/WindowsTorchApiMacro.h>
 #include <c10/util/StringUtil.h>
 #include <ATen/detail/FunctionTraits.h>
@@ -53,6 +53,11 @@
     catch (const c10::IndexError& e) {                               \
       auto msg = torch::processErrorMsg(e.what_without_backtrace()); \
       PyErr_SetString(PyExc_IndexError, msg.c_str());                \
+      retstmnt;                                                      \
+    }                                                                \
+    catch (const c10::ValueError& e) {                               \
+      auto msg = torch::processErrorMsg(e.what_without_backtrace()); \
+      PyErr_SetString(PyExc_ValueError, msg.c_str());                \
       retstmnt;                                                      \
     }                                                                \
     catch (const c10::Error& e) {                                    \
@@ -227,9 +232,18 @@ struct PyTorchError : public std::exception {
   std::string msg;
 };
 
+// Declare a printf-like function on gcc & clang
+// The compiler can then warn on invalid format specifiers
+#ifdef __GNUC__
+#  define TORCH_FORMAT_FUNC(FORMAT_INDEX, VA_ARGS_INDEX) \
+    __attribute__((format (printf, FORMAT_INDEX, VA_ARGS_INDEX)))
+#else
+#  define TORCH_FORMAT_FUNC(FORMAT_INDEX, VA_ARGS_INDEX)
+#endif
+
 // Translates to Python IndexError
 struct IndexError : public PyTorchError {
-  IndexError(const char *format, ...);
+  IndexError(const char *format, ...) TORCH_FORMAT_FUNC(2, 3);
   PyObject* python_type() override {
     return PyExc_IndexError;
   }
@@ -237,7 +251,7 @@ struct IndexError : public PyTorchError {
 
 // Translates to Python TypeError
 struct TypeError : public PyTorchError {
-  TORCH_API TypeError(const char *format, ...);
+  TORCH_API TypeError(const char *format, ...) TORCH_FORMAT_FUNC(2, 3);
   PyObject* python_type() override {
     return PyExc_TypeError;
   }
@@ -245,10 +259,24 @@ struct TypeError : public PyTorchError {
 
 // Translates to Python ValueError
 struct ValueError : public PyTorchError {
-  ValueError(const char *format, ...);
+  ValueError(const char *format, ...) TORCH_FORMAT_FUNC(2, 3);
   PyObject* python_type() override {
     return PyExc_ValueError;
   }
+};
+
+struct WarningMeta {
+  WarningMeta(const c10::SourceLocation& _source_location,
+      const std::string& _msg,
+      const bool _verbatim) :
+      source_location_{_source_location},
+      msg_{_msg},
+      verbatim_{_verbatim} { }
+
+
+  const c10::SourceLocation source_location_;
+  const std::string msg_;
+  const bool verbatim_;
 };
 
 // ATen warning handler for Python
@@ -259,7 +287,8 @@ public:
   TORCH_API ~PyWarningHandler() noexcept(false) override;
 
   void process(const at::SourceLocation &source_location,
-               const std::string &msg) override;
+               const std::string &msg,
+               const bool verbatim) override;
 
   /** Call if an exception has been thrown
 
@@ -272,8 +301,7 @@ public:
   }
 
 private:
-  using warning_buffer_t =
-    std::vector<std::pair<c10::SourceLocation, std::string>>;
+  using warning_buffer_t = std::vector<WarningMeta>;
 
   warning_buffer_t warning_buffer_;
 

@@ -35,6 +35,8 @@ DEFINE_DISPATCH(min_values_stub);
 DEFINE_DISPATCH(max_values_stub);
 DEFINE_DISPATCH(argmax_stub);
 DEFINE_DISPATCH(argmin_stub);
+DEFINE_DISPATCH(cumsum_stub);
+DEFINE_DISPATCH(cumprod_stub);
 
 #define OPTION_TYPE_EQUALITY_CHECK(option, out, self) \
 { \
@@ -184,6 +186,17 @@ static TensorIterator make_reduction(
   return TensorIterator::reduce_op(viewed_result1, viewed_result2, self.to(dtype));
 }
 
+Tensor _cumsum_cpu(const Tensor& self, int64_t dim) {
+  Tensor result = at::empty_like(self, MemoryFormat::Contiguous);
+  cumsum_stub(self.device().type(), result, self, dim);
+  return result;
+}
+
+Tensor& _cumsum_out_cpu(Tensor& result, const Tensor& self, int64_t dim) {
+  cumsum_stub(self.device().type(), result, self, dim);
+  return result;
+}
+
 Tensor cumsum(const Tensor& self, int64_t dim, c10::optional<ScalarType> dtype) {
   auto result = [&]() {
     NoNamesGuard guard;
@@ -207,6 +220,17 @@ Tensor& cumsum_out(Tensor& result, const Tensor& self, int64_t dim, c10::optiona
     at::_cumsum_out(result, self.toType(result.scalar_type()), dim);
   }
   namedinference::propagate_names(result, self);
+  return result;
+}
+
+Tensor _cumprod_cpu(const Tensor& self, int64_t dim) {
+  Tensor result = at::empty_like(self, MemoryFormat::Contiguous);
+  cumprod_stub(self.device().type(), result, self, dim);
+  return result;
+}
+
+Tensor& _cumprod_out_cpu(Tensor& result, const Tensor& self, int64_t dim) {
+  cumprod_stub(self.device().type(), result, self, dim);
   return result;
 }
 
@@ -717,6 +741,7 @@ Tensor min_values(const Tensor& self, DimnameList dims, bool keepdim) {
   TORCH_CHECK(false, "NYI: min_values with names");
   return at::min_values(self, dimnames_to_positions(self, dims), keepdim);
 }
+
 Tensor max_values(const Tensor& self, DimnameList dims, bool keepdim) {
   TORCH_CHECK(false, "NYI: max_values with names");
   return at::max_values(self, dimnames_to_positions(self, dims), keepdim);
@@ -774,7 +799,7 @@ static Tensor &std_var_out(Tensor &result, const Tensor &self, IntArrayRef dim, 
 
   if (at::isComplexType(self.scalar_type())){
     ScalarType dtype = c10::toValueType(get_dtype(result, self, {}, true));
-    Tensor real_in = self.real().to(dtype);
+    Tensor real_in = self.copy_real().to(dtype);
     Tensor real_out = at::empty({0}, self.options().dtype(dtype));
     auto iter = make_reduction("std or var", real_out, real_in, dim, keepdim, dtype);
     if (iter.numel() == 0) {
@@ -782,7 +807,7 @@ static Tensor &std_var_out(Tensor &result, const Tensor &self, IntArrayRef dim, 
     } else {
       std_var_stub(iter.device_type(), iter, unbiased, false);
     }
-    Tensor imag_in = self.imag().to(dtype);
+    Tensor imag_in = self.copy_imag().to(dtype);
     Tensor imag_out = at::empty({0}, self.options().dtype(dtype));
     iter = make_reduction("std or var", imag_out, imag_in, dim, keepdim, dtype);
     if (iter.numel() == 0) {
@@ -820,7 +845,7 @@ static std::tuple<Tensor&,Tensor&> std_var_mean_out(const char* fname, Tensor &r
            ".");
   if (at::isComplexType(self.scalar_type())){
     ScalarType dtype = c10::toValueType(get_dtype(result1, self, {}, true));
-    Tensor real_in = self.real().to(dtype);
+    Tensor real_in = self.copy_real().to(dtype);
     Tensor real_out_var = at::empty({0}, self.options().dtype(dtype));
     Tensor real_out_mean = at::empty({0}, self.options().dtype(dtype));
     auto iter = make_reduction(fname, real_out_var, real_out_mean, real_in, dim, keepdim, dtype);
@@ -830,7 +855,7 @@ static std::tuple<Tensor&,Tensor&> std_var_mean_out(const char* fname, Tensor &r
     } else {
       std_var_stub(iter.device_type(), iter, unbiased, false);
     }
-    Tensor imag_in = self.imag().to(dtype);
+    Tensor imag_in = self.copy_imag().to(dtype);
     Tensor imag_out_var = at::empty({0}, self.options().dtype(dtype));
     Tensor imag_out_mean = at::empty({0}, self.options().dtype(dtype));
     iter = make_reduction(fname, imag_out_var, imag_out_mean, imag_in, dim, keepdim, dtype);

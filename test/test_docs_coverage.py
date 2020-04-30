@@ -54,7 +54,10 @@ class TestDocCoverage(unittest.TestCase):
             'avg_pool1d', 'conv_transpose2d', 'conv_transpose1d', 'conv3d',
             'relu_', 'pixel_shuffle', 'conv2d', 'selu_', 'celu_', 'threshold_',
             'cosine_similarity', 'rrelu_', 'conv_transpose3d', 'conv1d', 'pdist',
-            'adaptive_avg_pool1d', 'conv_tbc'
+            'adaptive_avg_pool1d', 'conv_tbc',
+
+            # TODO: https://github.com/pytorch/pytorch/issues/36091
+            'quantized_lstm', 'quantized_gru'
         }
         has_docstring = set(
             a for a in dir(torch)
@@ -68,6 +71,12 @@ class TestDocCoverage(unittest.TestCase):
             removed something from torch.*, please remove it from the whitelist
             in test_docs_coverage.py'''))
         has_docstring -= whitelist
+        # https://github.com/pytorch/pytorch/issues/32014
+        # The following context manager classes are imported on top leve torch
+        # and are referred in docs as torch.no_grad. So we would like to have them
+        # included in docs too. has_docstring only contains functions and no classes
+        # so adding some them manually here.
+        has_docstring |= {'no_grad', 'enable_grad', 'set_grad_enabled'}
         # assert they are equal
         self.assertEqual(
             has_docstring, in_rst,

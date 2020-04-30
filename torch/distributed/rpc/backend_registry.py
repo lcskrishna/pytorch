@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import collections
-import datetime
+from datetime import timedelta
 import enum
 
 import torch.distributed as dist
@@ -59,12 +59,10 @@ def register_backend(
 
 def construct_rpc_backend_options(
     backend,
-    rpc_timeout=rpc_constants.DEFAULT_RPC_TIMEOUT,
+    rpc_timeout=rpc_constants.DEFAULT_RPC_TIMEOUT_SEC,
     init_method=rpc_constants.DEFAULT_INIT_METHOD,
     **kwargs
 ):
-    if not isinstance(rpc_timeout, datetime.timedelta):
-        raise RuntimeError("`rpc_timeout` must be a `datetime.timedelta`.")
 
     return backend.value.construct_rpc_backend_options_handler(
         rpc_timeout, init_method, **kwargs
@@ -83,11 +81,11 @@ def _process_group_construct_rpc_backend_options_handler(
 ):
     from . import ProcessGroupRpcBackendOptions
 
-    rpc_backend_options = ProcessGroupRpcBackendOptions()
-    rpc_backend_options.rpc_timeout = rpc_timeout
-    rpc_backend_options.init_method = init_method
-    rpc_backend_options.num_send_recv_threads = num_send_recv_threads
-    return rpc_backend_options
+    return ProcessGroupRpcBackendOptions(
+        rpc_timeout=rpc_timeout,
+        init_method=init_method,
+        num_send_recv_threads=num_send_recv_threads
+    )
 
 
 def _process_group_init_backend_handler(
@@ -130,7 +128,7 @@ def _process_group_init_backend_handler(
             name,
             group,
             rpc_backend_options.num_send_recv_threads,
-            rpc_backend_options.rpc_timeout,
+            timedelta(seconds=rpc_backend_options.rpc_timeout),
         )
     except Exception as ex:
         dist.destroy_process_group()

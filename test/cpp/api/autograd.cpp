@@ -121,6 +121,9 @@ TEST(AutogradAPITests, GradUnreachableTest) {
 
   ASSERT_VARIABLE_EQ(grad_res[0], x * 2);
   ASSERT_FALSE(grad_res[1].defined());
+
+  // allow_unused=False, but grads contains None inside, should throw
+  ASSERT_THROWS_WITH(grad({x * 2}, {x, y}, {}, {}, false, false), "Set allow_unused=True");
 }
 
 TEST(AutogradAPITests, RetainGrad) {
@@ -505,6 +508,9 @@ TEST(CustomAutogradTest, Reentrant) {
   ASSERT_VARIABLE_EQ(x.grad(), y_data);
 }
 
+
+// NOTE: If this fails for apparently unrelated reasons in TSAN be aware of
+// the TSAN limit on mutex: https://github.com/google/sanitizers/issues/950
 TEST(CustomAutogradTest, DeepReentrant) {
   struct DeepReenter : public Function<DeepReenter> {
     static Variable forward(AutogradContext *ctx, Variable x) {

@@ -49,7 +49,12 @@ def gen_variable_factories(out, declarations, template_path, disable_autograd=Fa
         is_namespace_fn = 'namespace' in decl['method_of']
         if (has_tensor_options or decl["name"].endswith("_like")) and is_namespace_fn:
             function_definitions.append(
-                process_function(decl, has_tensor_options, disable_autograd=disable_autograd))
+                process_function(
+                    decl,
+                    has_tensor_options,
+                    disable_autograd=disable_autograd,
+                )
+            )
     write(out,
           "variable_factories.h",
           CodeTemplate.from_file(template_path + "/variable_factories.h"),
@@ -68,9 +73,6 @@ def process_function(decl, has_tensor_options, disable_autograd):
             actual = "at::TensorOptions({})".format(actual)
         actuals.append(actual)
     requires_grad = "options.requires_grad()" if has_tensor_options else "false"
-    if decl['name'].endswith('_like') and not has_tensor_options:
-        # Insert TensorOptions before MemoryFormat
-        actuals.insert(-1, '{}.options()'.format(actuals[0]))
 
     if not disable_autograd:
         pre_record_trace, post_record_trace = format_trace(decl)

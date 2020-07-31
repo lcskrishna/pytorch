@@ -32,11 +32,13 @@ install_ubuntu() {
       ;;
     3.6)
       install_ubuntu_deadsnakes python3.6-dev
+      apt-get install -y python3-distutils
       PYTHON=python3.6
       INSTALL_SETUPTOOLS=yes
       ;;
     3.7)
       install_ubuntu_deadsnakes python3.7-dev
+      apt-get install -y python3-distutils
       PYTHON=python3.7
       INSTALL_SETUPTOOLS=yes
       ;;
@@ -154,11 +156,12 @@ pip install --no-cache-dir \
     future \
     hypothesis \
     jupyter \
-    numpy \
+    numpy==1.18.5 \
     protobuf \
     pytest \
     pyyaml \
     scipy==1.1.0 \
+    scikit-learn==0.20.3 \
     scikit-image \
     tabulate \
     virtualenv \
@@ -167,5 +170,7 @@ pip install --no-cache-dir \
     typing-extensions \
     pyyaml \
     librosa>=0.6.2 \
-    psutil
+    psutil \
+    numba==0.46.0 \
+    llvmlite==0.30.0
 

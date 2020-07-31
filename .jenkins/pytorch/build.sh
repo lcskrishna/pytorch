@@ -123,6 +123,16 @@ if [[ "${BUILD_ENVIRONMENT}" == *-android* ]]; then
 fi
 
 if [[ "$BUILD_ENVIRONMENT" == *rocm* ]]; then
+  # TODO DO NOT UPSTREAM
+  # libhip_hcc was renamed libamdhip64; libhiprtc is part of libamdhip64
+  # Fix third party modules that use old name but haven't been fixed upstream, but only as needed.
+  if test "x${HIP_PATH}" = x; then
+    HIP_PATH=/opt/rocm/hip
+  fi
+  if grep HIP_COMPILER=clang ${HIP_PATH}/lib/.hipInfo -q; then
+    sed -i 's/ hip_hcc / amdhip64 /' $(dirname "${BASH_SOURCE[0]}")/../../third_party/gloo/cmake/Hip.cmake
+  fi
+
   # hcc used to run out of memory, silently exiting without stopping
   # the build process, leaving undefined symbols in the shared lib,
   # causing undefined symbol errors when later running tests.

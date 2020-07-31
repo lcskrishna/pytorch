@@ -203,8 +203,12 @@ static inline __device__ double gpuAtomicAdd(double *address, double val) {
   return atomicAdd(address, val);
 }
 
-static inline __device__ float gpuAtomicAdd(float *address, float val) {
-  return atomicAdd(address, val);
+static inline __device__ void gpuAtomicAdd(float *address, float val) {
+#if defined(__HIP_PLATFORM_HCC__) && HIP_VERSION < 305
+  atomicAdd(address, val);
+#else
+  atomicAddNoRet(address, val);
+#endif
 }
 
 template<typename T>

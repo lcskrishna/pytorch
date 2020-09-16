@@ -211,6 +211,9 @@ struct ProfilerThreadLocalState
       return;
     }
     if (config_.state == ProfilerState::NVTX) {
+      //std::cout << "INFO: Inside pushRange." << std::endl;
+      //std::cout << "name: " << name << " msg: " << msg << " sequence_nr: " << sequence_nr << " shapes " << shapes << std::endl; 
+      std::cout << getNvtxStr(name, msg, sequence_nr, shapes).c_str() << std::endl;
       cuda_stubs->nvtxRangePushA(getNvtxStr(
           name, msg, sequence_nr, shapes).c_str());
     } else {

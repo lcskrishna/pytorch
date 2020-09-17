@@ -2,6 +2,12 @@
 #include <ATen/ATen.h>
 #include <THC/THCAtomics.cuh>
 
+#ifdef __HIP_PLATFORM_HCC__
+#define ATOMIC_ADD_NO_RET atomicAddNoReturn
+#else
+#define ATOMIC_ADD_NO_RET atomicAdd
+#endif
+
 namespace at {
 namespace native {
 
@@ -28,16 +34,16 @@ __device__ __forceinline__ void fastSpecializedAtomicAdd(
     __half2 value2;
     value2.x = value;
     value2.y = __int2half_rz(0);
-    atomicAddNoReturn(reinterpret_cast<__half2*>(tensor) + index / 2, value2);
+    ATOMIC_ADD_NO_RET(reinterpret_cast<__half2*>(tensor) + index / 2, value2);
 
   } else if (!low_bit && index > 0) {
     __half2 value2;
     value2.x = __int2half_rz(0);
     value2.y = value;
-    atomicAddNoReturn(reinterpret_cast<__half2*>(tensor) + index / 2, value2);
+    ATOMIC_ADD_NO_RET(reinterpret_cast<__half2*>(tensor) + index / 2, value2);
 
   } else {
-    atomicAddNoReturn(
+    ATOMIC_ADD_NO_RET(
         reinterpret_cast<__half*>(tensor) + index, static_cast<__half>(value));
   }
 #endif

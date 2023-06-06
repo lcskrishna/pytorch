@@ -823,7 +823,12 @@ class FSDPTest(MultiProcessTestCase):
 
     @property
     def world_size(self):
-        return torch.cuda.device_count() if torch.cuda.is_available() else 4
+        nranks = 4
+        if torch.cuda.is_available:
+            nranks = torch.cuda.device_count()
+        if torch.version.hip and nranks > 8:
+            nranks = 8 ## use only 8 GPUs.
+        return nranks
 
     @property
     def process_group(self):

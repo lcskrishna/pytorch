@@ -869,13 +869,16 @@ def preprocessor(
                 elif header_filepath in HIPIFY_FINAL_RESULT:
                     header_result = HIPIFY_FINAL_RESULT[header_filepath]
                     if header_result.current_state == "initialized":
-                        header_result.hipified_path = fout_path
                         # get_hip_file_path needs a relative path to work correctly
                         header_rel_path =  os.path.relpath(header_filepath, output_directory)
                         header_fout_path = os.path.abspath(os.path.join(output_directory, get_hip_file_path(header_rel_path, is_pytorch_extension)))
                         header_result.hipified_path = header_fout_path
                         HIPIFY_FINAL_RESULT[header_filepath] = header_result
                         return templ.format(os.path.relpath(header_fout_path if header_fout_path is not None
+                                                    else header_filepath, header_dir))
+                    elif header_result.current_state == "done":
+                        hipified_header_filepath = HIPIFY_FINAL_RESULT[header_filepath].hipified_path
+                        return templ.format(os.path.relpath(hipified_header_filepath if hipified_header_filepath is not None
                                                     else header_filepath, header_dir))
                 hipified_header_filepath = HIPIFY_FINAL_RESULT[header_filepath]["hipified_path"]
                 return templ.format(os.path.relpath(hipified_header_filepath if hipified_header_filepath is not None

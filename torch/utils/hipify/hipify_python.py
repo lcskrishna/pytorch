@@ -938,16 +938,19 @@ def preprocessor(
                 fout.write(output_source)
             hipify_result.hipified_path = fout_path
             hipify_result.status = "[ok]"
+            hipify_result.current_state = "done"
             return hipify_result
         except PermissionError as e:
             print(f"{bcolors.WARNING}Failed to save {fout_path} with \"{e.strerror}\", leaving {fin_path} unchanged.{bcolors.ENDC}",
                   file=sys.stderr)
             hipify_result.hipified_path = fin_path
             hipify_result.status = "[skipped, no permissions]"
+            hipify_result.current_state = "done"
             return hipify_result
     else:
         hipify_result.hipified_path = fout_path
         hipify_result.status = "[skipped, already hipified]"
+        hipify_result.current_state = "done"
         return hipify_result
 
 def file_specific_replacement(filepath, search_string, replace_string, strict=False):

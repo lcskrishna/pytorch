@@ -753,11 +753,13 @@ RE_THC_GENERIC_FILE = re.compile(r'#define THC_GENERIC_FILE "([^"]+)"')
 RE_CU_SUFFIX = re.compile(r'\.cu\b')  # be careful not to pick up .cuh
 
 """
-Returns a dict with the following keys:
+Returns a HipifyResult object with the following details:
     "hipified_path" : absolute path of hipified source file
     "status"        : "ok"      if hipified file was written out
                       "skipped" if an identical hipified file already existed or hipified file couldn't be written out
                       "ignored" if the source file was a hipified file itself or not meant to be hipified
+    "current_state" : "initialized" if source file is first ready to be hipified
+                      "done" if source file is done with hipification process
 """
 
 

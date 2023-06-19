@@ -36,11 +36,16 @@ from .cuda_to_hip_mappings import MATH_TRANSPILATIONS
 
 from typing import Dict, List, Iterator, Optional
 from collections.abc import Mapping, Iterable
+from enum import Enum
+
+class CurrentState(Enum):
+    INITIALIZED = 1
+    DONE = 2
 
 class HipifyResult:
-    def __init__(self, current_state):
+    def __init__(self, current_state, hipified_path):
         self.current_state = current_state
-        self.hipified_path = ""
+        self.hipified_path = hipified_path
         self.status = ""
 
     def __str__(self):
@@ -195,8 +200,7 @@ def preprocess_file_and_save_result(
         clean_ctx: GeneratedFileCleaner,
         show_progress: bool) -> None:
     fin_path = os.path.abspath(os.path.join(output_directory, filepath))
-    hipify_result = HipifyResult(current_state="initialized")
-    hipify_result.hipified_path = fin_path
+    hipify_result = HipifyResult(current_state=CurrentState.INITIALIZED, hipified_path=fin_path)
     HIPIFY_FINAL_RESULT[fin_path] = hipify_result
     result = preprocessor(output_directory, filepath, all_files, header_include_dirs, stats,
                           hip_clang_launch, is_pytorch_extension, clean_ctx, show_progress)
@@ -758,8 +762,8 @@ Returns a HipifyResult object with the following details:
     "status"        : "ok"      if hipified file was written out
                       "skipped" if an identical hipified file already existed or hipified file couldn't be written out
                       "ignored" if the source file was a hipified file itself or not meant to be hipified
-    "current_state" : "initialized" if source file is first ready to be hipified
-                      "done" if source file is done with hipification process
+    "current_state" : CurrentState.INITIALIZED if source file is first ready to be hipified
+                      CurrentState.DONE if source file is done with hipification process
 """
 
 
@@ -779,17 +783,16 @@ def preprocessor(
     if filepath not in all_files:
         hipify_result.hipified_path = None
         hipify_result.status = "[ignored, not to be hipified]"
-        hipify_result.current_state = "done"
+        hipify_result.current_state = CurrentState.DONE
         return hipify_result
 
-    fin_path = os.path.abspath(os.path.join(output_directory, filepath))
     rel_filepath = os.path.relpath(filepath, output_directory)
 
     with open(fin_path, 'r', encoding='utf-8') as fin:
         if fin.readline() == HIPIFY_C_BREADCRUMB:
             hipify_result.hipified_path = None
             hipify_result.status = "[ignored, input is hipified output]"
-            hipify_result.current_state = "done"
+            hipify_result.current_state = CurrentState.DONE
             return hipify_result
         fin.seek(0)
         output_source = fin.read()
@@ -868,17 +871,13 @@ def preprocessor(
                                                     is_pytorch_extension, clean_ctx, show_progress)
                 elif header_filepath in HIPIFY_FINAL_RESULT:
                     header_result = HIPIFY_FINAL_RESULT[header_filepath]
-                    if header_result.current_state == "initialized":
+                    if header_result.current_state == CurrentState.INITIALIZED:
                         # get_hip_file_path needs a relative path to work correctly
                         header_rel_path =  os.path.relpath(header_filepath, output_directory)
                         header_fout_path = os.path.abspath(os.path.join(output_directory, get_hip_file_path(header_rel_path, is_pytorch_extension)))
                         header_result.hipified_path = header_fout_path
                         HIPIFY_FINAL_RESULT[header_filepath] = header_result
                         return templ.format(os.path.relpath(header_fout_path if header_fout_path is not None
-                                                    else header_filepath, header_dir))
-                    elif header_result.current_state == "done":
-                        hipified_header_filepath = HIPIFY_FINAL_RESULT[header_filepath].hipified_path
-                        return templ.format(os.path.relpath(hipified_header_filepath if hipified_header_filepath is not None
                                                     else header_filepath, header_dir))
                 hipified_header_filepath = HIPIFY_FINAL_RESULT[header_filepath]["hipified_path"]
                 return templ.format(os.path.relpath(hipified_header_filepath if hipified_header_filepath is not None
@@ -889,8 +888,6 @@ def preprocessor(
     output_source = RE_QUOTE_HEADER.sub(mk_repl('#include "{0}"', True), output_source)
     output_source = RE_ANGLE_HEADER.sub(mk_repl('#include <{0}>', False), output_source)
     output_source = RE_THC_GENERIC_FILE.sub(mk_repl('#define THC_GENERIC_FILE "{0}"'), output_source)
-
-    hipify_result = HIPIFY_FINAL_RESULT[fin_path]
 
     # CMakeLists.txt rewrites
     if filepath.endswith('CMakeLists.txt'):
@@ -921,7 +918,7 @@ def preprocessor(
     ):
         hipify_result.hipified_path = fin_path
         hipify_result.status = "[skipped, no changes]"
-        hipify_result.current_state = "done"
+        hipify_result.current_state = CurrentState.DONE
         return hipify_result
 
     # Add hipify breadcrumb for C-style files to avoid re-hipification
@@ -938,19 +935,19 @@ def preprocessor(
                 fout.write(output_source)
             hipify_result.hipified_path = fout_path
             hipify_result.status = "[ok]"
-            hipify_result.current_state = "done"
+            hipify_result.current_state = CurrentState.DONE
             return hipify_result
         except PermissionError as e:
             print(f"{bcolors.WARNING}Failed to save {fout_path} with \"{e.strerror}\", leaving {fin_path} unchanged.{bcolors.ENDC}",
                   file=sys.stderr)
             hipify_result.hipified_path = fin_path
             hipify_result.status = "[skipped, no permissions]"
-            hipify_result.current_state = "done"
+            hipify_result.current_state = CurrentState.DONE
             return hipify_result
     else:
         hipify_result.hipified_path = fout_path
         hipify_result.status = "[skipped, already hipified]"
-        hipify_result.current_state = "done"
+        hipify_result.current_state = CurrentState.DONE
         return hipify_result
 
 def file_specific_replacement(filepath, search_string, replace_string, strict=False):

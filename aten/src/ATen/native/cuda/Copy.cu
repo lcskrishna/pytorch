@@ -182,6 +182,7 @@ __global__ void transpose_tile_big_kernel(const void* __restrict a, void* __rest
   constexpr uint32_t XCD = 8;
   constexpr uint32_t SEQ = 8;
   constexpr uint32_t sblk = XCD * SEQ;
+  const uint32_t max_swizzle = (nk_tiles / sblk) * sblk;
   uint32_t tIdx = blockIdx.x % nk_tiles;
   tIdx = tIdx > max_swizzle ? tIdx :
       (tIdx / sblk) * sblk + (tIdx % sblk) / SEQ + (tIdx % SEQ) * XCD;
